@@ -1,0 +1,304 @@
+" Kubernetes 考試環境專用 vim 配置 (Bastion Container)
+
+" 基本設定
+set nocompatible
+set number
+set relativenumber
+set ruler
+set showcmd
+set showmatch
+set hlsearch
+set incsearch
+set ignorecase
+set smartcase
+set autoindent
+set smartindent
+set expandtab
+set tabstop=2
+set softtabstop=2
+set shiftwidth=2
+set wrap
+set linebreak
+set encoding=utf-8
+set fileformat=unix
+set backspace=indent,eol,start
+
+" 語法高亮
+syntax on
+
+" 顏色主題
+colorscheme default
+set background=dark
+
+" 文件類型檢測
+filetype on
+filetype plugin on
+filetype indent on
+
+" 顯示設定
+set laststatus=2
+set wildmenu
+set wildmode=longest,list,full
+set scrolloff=5
+set sidescrolloff=5
+
+" YAML 文件特殊設定（Kubernetes 主要格式）
+autocmd FileType yaml setlocal ts=2 sts=2 sw=2 expandtab
+autocmd FileType yaml setlocal indentkeys-=<:>
+autocmd FileType yaml setlocal cursorcolumn
+
+" 快捷鍵設定
+let mapleader = ","
+
+" 常用 Kubernetes 資源範本
+nnoremap <leader>kp :-1read ~/.vim/templates/pod.yaml<CR>
+nnoremap <leader>kd :-1read ~/.vim/templates/deployment.yaml<CR>
+nnoremap <leader>ks :-1read ~/.vim/templates/service.yaml<CR>
+nnoremap <leader>kc :-1read ~/.vim/templates/configmap.yaml<CR>
+nnoremap <leader>ksec :-1read ~/.vim/templates/secret.yaml<CR>
+nnoremap <leader>kns :-1read ~/.vim/templates/namespace.yaml<CR>
+nnoremap <leader>kpv :-1read ~/.vim/templates/pv.yaml<CR>
+nnoremap <leader>kpvc :-1read ~/.vim/templates/pvc.yaml<CR>
+nnoremap <leader>king :-1read ~/.vim/templates/ingress.yaml<CR>
+
+" 檔案操作
+nnoremap <leader>w :w<CR>
+nnoremap <leader>q :q<CR>
+nnoremap <leader>wq :wq<CR>
+nnoremap <leader>x :x<CR>
+
+" 搜尋和導航
+nnoremap <leader>h :noh<CR>
+nnoremap <leader>f :find<space>
+nnoremap <leader>b :buffer<space>
+
+" 視窗分割導航
+nnoremap <C-h> <C-w>h
+nnoremap <C-j> <C-w>j
+nnoremap <C-k> <C-w>k
+nnoremap <C-l> <C-w>l
+
+" 快速編輯常用文件
+nnoremap <leader>ev :vsplit ~/.vimrc<CR>
+nnoremap <leader>eb :vsplit ~/.bashrc<CR>
+nnoremap <leader>ea :vsplit ~/.bash_aliases<CR>
+
+" Kubernetes 特定操作
+nnoremap <leader>ka :!kubectl apply -f %<CR>
+nnoremap <leader>kda :!kubectl delete -f %<CR>
+nnoremap <leader>kv :!kubectl apply --dry-run=client -f %<CR>
+
+" 狀態列設定
+set statusline=
+set statusline+=%f         " 文件名
+set statusline+=%m         " 修改標記
+set statusline+=%r         " 只讀標記
+set statusline+=\ %y       " 文件類型
+set statusline+=%=         " 右對齊
+set statusline+=\ %c       " 列號
+set statusline+=\/%l       " 行號
+set statusline+=\/         " 分隔符
+set statusline+=%L         " 總行數
+set statusline+=\ (%p%%)   " 百分比位置
+
+" 備份和交換文件
+set nobackup
+set noswapfile
+set undofile
+set undodir=~/.vim/undo
+
+" 建立必要目錄
+if !isdirectory($HOME."/.vim")
+    call mkdir($HOME."/.vim", "p", 0700)
+endif
+if !isdirectory($HOME."/.vim/undo")
+    call mkdir($HOME."/.vim/undo", "p", 0700)
+endif
+if !isdirectory($HOME."/.vim/templates")
+    call mkdir($HOME."/.vim/templates", "p", 0700)
+endif
+
+" 特殊文件處理
+autocmd BufNewFile,BufRead *.yaml,*.yml set filetype=yaml
+autocmd BufNewFile,BufRead Dockerfile* set filetype=dockerfile
+autocmd BufNewFile,BufRead *.json set filetype=json
+
+" YAML 文件的特殊高亮
+autocmd FileType yaml syntax match yamlBlockMappingKey /^\s*\zs[^:]*:/
+autocmd FileType yaml highlight yamlBlockMappingKey ctermfg=6
+
+" JSON 格式化
+nnoremap <leader>jf :%!jq .<CR>
+
+" 自動建立 Kubernetes 範本
+function! CreateKubernetesTemplates()
+    " Pod 範本
+    call writefile([
+        \ 'apiVersion: v1',
+        \ 'kind: Pod',
+        \ 'metadata:',
+        \ '  name: ',
+        \ '  namespace: default',
+        \ '  labels:',
+        \ '    app: ',
+        \ 'spec:',
+        \ '  containers:',
+        \ '  - name: ',
+        \ '    image: ',
+        \ '    ports:',
+        \ '    - containerPort: 80',
+        \ '  restartPolicy: Never'
+    \ ], $HOME.'/.vim/templates/pod.yaml')
+
+    " Deployment 範本
+    call writefile([
+        \ 'apiVersion: apps/v1',
+        \ 'kind: Deployment',
+        \ 'metadata:',
+        \ '  name: ',
+        \ '  namespace: default',
+        \ '  labels:',
+        \ '    app: ',
+        \ 'spec:',
+        \ '  replicas: 1',
+        \ '  selector:',
+        \ '    matchLabels:',
+        \ '      app: ',
+        \ '  template:',
+        \ '    metadata:',
+        \ '      labels:',
+        \ '        app: ',
+        \ '    spec:',
+        \ '      containers:',
+        \ '      - name: ',
+        \ '        image: ',
+        \ '        ports:',
+        \ '        - containerPort: 80'
+    \ ], $HOME.'/.vim/templates/deployment.yaml')
+
+    " Service 範本
+    call writefile([
+        \ 'apiVersion: v1',
+        \ 'kind: Service',
+        \ 'metadata:',
+        \ '  name: ',
+        \ '  namespace: default',
+        \ 'spec:',
+        \ '  selector:',
+        \ '    app: ',
+        \ '  ports:',
+        \ '  - protocol: TCP',
+        \ '    port: 80',
+        \ '    targetPort: 80',
+        \ '  type: ClusterIP'
+    \ ], $HOME.'/.vim/templates/service.yaml')
+
+    " ConfigMap 範本
+    call writefile([
+        \ 'apiVersion: v1',
+        \ 'kind: ConfigMap',
+        \ 'metadata:',
+        \ '  name: ',
+        \ '  namespace: default',
+        \ 'data:',
+        \ '  key1: value1',
+        \ '  key2: value2'
+    \ ], $HOME.'/.vim/templates/configmap.yaml')
+
+    " Secret 範本
+    call writefile([
+        \ 'apiVersion: v1',
+        \ 'kind: Secret',
+        \ 'metadata:',
+        \ '  name: ',
+        \ '  namespace: default',
+        \ 'type: Opaque',
+        \ 'data:',
+        \ '  key1: dmFsdWUx',
+        \ '  key2: dmFsdWUy'
+    \ ], $HOME.'/.vim/templates/secret.yaml')
+
+    " Namespace 範本
+    call writefile([
+        \ 'apiVersion: v1',
+        \ 'kind: Namespace',
+        \ 'metadata:',
+        \ '  name: '
+    \ ], $HOME.'/.vim/templates/namespace.yaml')
+
+    " PersistentVolume 範本
+    call writefile([
+        \ 'apiVersion: v1',
+        \ 'kind: PersistentVolume',
+        \ 'metadata:',
+        \ '  name: ',
+        \ 'spec:',
+        \ '  capacity:',
+        \ '    storage: 1Gi',
+        \ '  accessModes:',
+        \ '  - ReadWriteOnce',
+        \ '  persistentVolumeReclaimPolicy: Retain',
+        \ '  storageClassName: manual',
+        \ '  hostPath:',
+        \ '    path: /tmp/data'
+    \ ], $HOME.'/.vim/templates/pv.yaml')
+
+    " PersistentVolumeClaim 範本
+    call writefile([
+        \ 'apiVersion: v1',
+        \ 'kind: PersistentVolumeClaim',
+        \ 'metadata:',
+        \ '  name: ',
+        \ '  namespace: default',
+        \ 'spec:',
+        \ '  accessModes:',
+        \ '  - ReadWriteOnce',
+        \ '  resources:',
+        \ '    requests:',
+        \ '      storage: 1Gi',
+        \ '  storageClassName: manual'
+    \ ], $HOME.'/.vim/templates/pvc.yaml')
+
+    " Ingress 範本
+    call writefile([
+        \ 'apiVersion: networking.k8s.io/v1',
+        \ 'kind: Ingress',
+        \ 'metadata:',
+        \ '  name: ',
+        \ '  namespace: default',
+        \ 'spec:',
+        \ '  rules:',
+        \ '  - host: ',
+        \ '    http:',
+        \ '      paths:',
+        \ '      - path: /',
+        \ '        pathType: Prefix',
+        \ '        backend:',
+        \ '          service:',
+        \ '            name: ',
+        \ '            port:',
+        \ '              number: 80'
+    \ ], $HOME.'/.vim/templates/ingress.yaml')
+endfunction
+
+" 在啟動時建立範本
+autocmd VimEnter * call CreateKubernetesTemplates()
+
+" 考試模式設定
+if exists("$EXAM_MODE")
+    " 考試模式下的特殊設定
+    set mouse=
+    set noswapfile
+    set nobackup
+    set noundofile
+    set viminfo=
+endif
+
+" 快速跳轉到常用位置
+nnoremap <leader>gw :cd /workspace<CR>:pwd<CR>
+nnoremap <leader>gm :cd /workspace/manifests<CR>:pwd<CR>
+nnoremap <leader>gs :cd /workspace/scripts<CR>:pwd<CR>
+
+" 行號切換
+nnoremap <leader>n :set number!<CR>
+nnoremap <leader>rn :set relativenumber!<CR>

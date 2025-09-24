@@ -1,0 +1,266 @@
+# Kubernetes 考試環境專用 .bashrc (Bastion Container)
+
+# 如果不是互動式 shell，直接返回
+[[ $- != *i* ]] && return
+
+# 歷史記錄設定
+HISTCONTROL=ignoreboth:erasedups
+HISTSIZE=50000
+HISTFILESIZE=100000
+shopt -s histappend
+shopt -s checkwinsize
+shopt -s cmdhist
+
+# 在每個命令後儲存歷史記錄
+PROMPT_COMMAND='history -a'
+
+# 彩色提示符 (包含當前 namespace)
+get_kube_namespace() {
+    if [ -n "$KUBECONFIG" ] && command -v kubectl >/dev/null 2>&1; then
+        kubectl config view --minify --output 'jsonpath={..namespace}' 2>/dev/null || echo "default"
+    else
+        echo "default"
+    fi
+}
+
+if [ -x /usr/bin/tput ] && tput setaf 1 >&/dev/null; then
+    PS1='\[\033[01;32m\]\u@bastion\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\] \[\033[01;33m\][$(get_kube_namespace)]\[\033[00m\]\$ '
+else
+    PS1='\u@bastion:\w [$(get_kube_namespace)]\$ '
+fi
+
+# 啟用彩色輸出
+if [ -x /usr/bin/dircolors ]; then
+    alias ls='ls --color=auto'
+    alias grep='grep --color=auto'
+    alias fgrep='fgrep --color=auto'
+    alias egrep='egrep --color=auto'
+fi
+
+# 基本別名
+alias ll='ls -alF'
+alias la='ls -A'
+alias l='ls -CF'
+
+# Kubernetes 專用別名 - 基本操作
+alias k='kubectl'
+alias kgp='kubectl get pods'
+alias kgpo='kubectl get pods -o wide'
+alias kgs='kubectl get services'
+alias kgd='kubectl get deployments'
+alias kgn='kubectl get nodes'
+alias kgns='kubectl get namespaces'
+alias kgpv='kubectl get pv'
+alias kgpvc='kubectl get pvc'
+alias kgsec='kubectl get secrets'
+alias kgcm='kubectl get configmaps'
+alias kging='kubectl get ingress'
+
+# Kubernetes 專用別名 - 操作
+alias kaf='kubectl apply -f'
+alias kdf='kubectl delete -f'
+alias kcf='kubectl create -f'
+alias krp='kubectl replace -f'
+
+# Kubernetes 專用別名 - 描述
+alias kdp='kubectl describe pod'
+alias kds='kubectl describe service'
+alias kdd='kubectl describe deployment'
+alias kdn='kubectl describe node'
+alias kdns='kubectl describe namespace'
+alias kdsec='kubectl describe secret'
+alias kdcm='kubectl describe configmap'
+
+# Kubernetes 專用別名 - 日誌
+alias kl='kubectl logs'
+alias klf='kubectl logs -f'
+alias klp='kubectl logs --previous'
+
+# Kubernetes 專用別名 - 執行和除錯
+alias ke='kubectl exec'
+alias kei='kubectl exec -it'
+alias kpf='kubectl port-forward'
+
+# 進階 Kubernetes 別名
+alias kwatch='kubectl get pods -w'
+alias kall='kubectl get all'
+alias kallns='kubectl get all --all-namespaces'
+alias ktop='kubectl top'
+alias ktn='kubectl top nodes'
+alias ktp='kubectl top pods'
+
+# Namespace 管理函數
+kns() {
+    if [ -z "$1" ]; then
+        kubectl config view --minify --output 'jsonpath={..namespace}'
+        echo
+    else
+        kubectl config set-context --current --namespace=$1
+        echo "已切換到 namespace: $1"
+    fi
+}
+
+# 快速資源建立函數
+mkpod() {
+    local name=${1:-test-pod}
+    local image=${2:-nginx}
+    local namespace=${3:-$(get_kube_namespace)}
+    kubectl run $name --image=$image --restart=Never --namespace=$namespace --dry-run=client -o yaml
+}
+
+mkdeploy() {
+    local name=${1:-test-deploy}
+    local image=${2:-nginx}
+    local replicas=${3:-1}
+    local namespace=${4:-$(get_kube_namespace)}
+    kubectl create deployment $name --image=$image --replicas=$replicas --namespace=$namespace --dry-run=client -o yaml
+}
+
+mksvc() {
+    local name=${1:-test-svc}
+    local port=${2:-80}
+    local target_port=${3:-80}
+    local namespace=${4:-$(get_kube_namespace)}
+    kubectl create service clusterip $name --tcp=$port:$target_port --namespace=$namespace --dry-run=client -o yaml
+}
+
+mkcm() {
+    local name=${1:-test-cm}
+    local namespace=${2:-$(get_kube_namespace)}
+    shift 2
+    kubectl create configmap $name --namespace=$namespace --dry-run=client -o yaml "$@"
+}
+
+mksecret() {
+    local name=${1:-test-secret}
+    local namespace=${2:-$(get_kube_namespace)}
+    shift 2
+    kubectl create secret generic $name --namespace=$namespace --dry-run=client -o yaml "$@"
+}
+
+# 快速檢查函數
+check() {
+    echo "=== 叢集概況 ==="
+    kubectl get nodes -o wide
+    echo
+    echo "=== 當前 Namespace ($( get_kube_namespace )) ==="
+    kubectl get all
+    echo
+    echo "=== 系統 Pods ==="
+    kubectl get pods -n kube-system --no-headers | wc -l | xargs echo "系統 Pods 數量:"
+    echo
+    echo "=== 叢集資源使用 ==="
+    kubectl top nodes 2>/dev/null || echo "metrics-server 未安裝"
+}
+
+checkall() {
+    echo "=== 所有 Namespaces 資源 ==="
+    kubectl get all --all-namespaces
+}
+
+# 清理函數
+cleanup() {
+    local namespace=$(get_kube_namespace)
+    echo "當前 namespace: $namespace"
+    read -p "確定要清理 '$namespace' namespace 的所有資源？ (y/N): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo "清理中..."
+        kubectl delete --all pods,services,deployments,configmaps,secrets,ingress,pvc --namespace=$namespace
+        echo "清理完成"
+    else
+        echo "已取消"
+    fi
+}
+
+# 考試計時器
+timer() {
+    local seconds=${1:-7200}  # 預設 2 小時 (CKA/CKAD 考試時間)
+    local start_time=$(date +%s)
+    local end_time=$((start_time + seconds))
+
+    echo "考試計時器啟動：$seconds 秒 (結束時間: $(date -d @$end_time '+%H:%M:%S'))"
+
+    while [ $(date +%s) -lt $end_time ]; do
+        local remaining=$((end_time - $(date +%s)))
+        local hours=$((remaining / 3600))
+        local minutes=$(((remaining % 3600) / 60))
+        local secs=$((remaining % 60))
+
+        printf "\r剩餘時間: %02d:%02d:%02d" $hours $minutes $secs
+        sleep 1
+    done
+
+    echo -e "\n⏰ 考試時間結束！"
+    # 發出響鈴 (如果支援)
+    echo -e "\a"
+}
+
+# YAML 驗證函數
+yamlcheck() {
+    if [ -z "$1" ]; then
+        echo "使用方式: yamlcheck <檔案名>"
+        return 1
+    fi
+
+    if [ ! -f "$1" ]; then
+        echo "檔案不存在: $1"
+        return 1
+    fi
+
+    echo "檢查 YAML 語法..."
+    if kubectl apply --dry-run=client -f "$1" >/dev/null 2>&1; then
+        echo "✓ YAML 語法正確"
+        kubectl apply --dry-run=client -f "$1"
+    else
+        echo "✗ YAML 語法錯誤"
+        kubectl apply --dry-run=client -f "$1"
+        return 1
+    fi
+}
+
+# 環境變數
+export EDITOR=vim
+export VISUAL=vim
+export KUBE_EDITOR=vim
+export TERM=xterm-256color
+export KUBECONFIG=${KUBECONFIG:-/kubeconfig/config}
+
+# kubectl 自動完成
+if command -v kubectl > /dev/null 2>&1; then
+    source <(kubectl completion bash)
+    complete -F __start_kubectl k
+fi
+
+# helm 自動完成
+if command -v helm > /dev/null 2>&1; then
+    source <(helm completion bash)
+fi
+
+# 載入額外的別名
+if [ -f ~/.bash_aliases ]; then
+    source ~/.bash_aliases
+fi
+
+# 歡迎訊息
+if [ "$PS1" ]; then
+    echo ""
+    echo "🎯 Kubernetes 考試環境已準備就緒！"
+    echo ""
+    echo "📝 常用指令："
+    echo "   k               - kubectl 簡寫"
+    echo "   kns <namespace> - 切換 namespace"
+    echo "   check           - 檢查叢集狀態"
+    echo "   timer <秒數>    - 啟動考試計時器"
+    echo "   cleanup         - 清理當前 namespace"
+    echo "   yamlcheck <檔案> - 驗證 YAML 檔案"
+    echo ""
+    echo "🛠 快速建立："
+    echo "   mkpod <名稱> <映像>     - 建立 Pod YAML"
+    echo "   mkdeploy <名稱> <映像>  - 建立 Deployment YAML"
+    echo "   mksvc <名稱> <端口>     - 建立 Service YAML"
+    echo ""
+    echo "📂 工作目錄: /workspace"
+    echo "📁 目前 namespace: $(get_kube_namespace)"
+    echo ""
+fi

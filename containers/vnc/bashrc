@@ -1,0 +1,149 @@
+# Kubernetes 考試環境專用 .bashrc
+
+# 如果不是互動式 shell，直接返回
+[[ $- != *i* ]] && return
+
+# 歷史記錄設定
+HISTCONTROL=ignoreboth
+HISTSIZE=10000
+HISTFILESIZE=20000
+shopt -s histappend
+shopt -s checkwinsize
+
+# 彩色提示符
+if [ -x /usr/bin/tput ] && tput setaf 1 >&/dev/null; then
+    PS1='\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
+else
+    PS1='\u@\h:\w\$ '
+fi
+
+# 啟用彩色 ls
+if [ -x /usr/bin/dircolors ]; then
+    test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
+    alias ls='ls --color=auto'
+    alias grep='grep --color=auto'
+    alias fgrep='fgrep --color=auto'
+    alias egrep='egrep --color=auto'
+fi
+
+# 常用別名
+alias ll='ls -alF'
+alias la='ls -A'
+alias l='ls -CF'
+alias k='kubectl'
+alias kgp='kubectl get pods'
+alias kgs='kubectl get services'
+alias kgd='kubectl get deployments'
+alias kgn='kubectl get nodes'
+alias kaf='kubectl apply -f'
+alias kdf='kubectl delete -f'
+alias kdp='kubectl describe pod'
+alias kds='kubectl describe service'
+
+# Kubernetes 考試常用函數
+kns() {
+    if [ -z "$1" ]; then
+        kubectl config view --minify --output 'jsonpath={..namespace}'
+        echo
+    else
+        kubectl config set-context --current --namespace=$1
+    fi
+}
+
+# 快速建立 pod
+mkpod() {
+    local name=${1:-test-pod}
+    local image=${2:-nginx}
+    kubectl run $name --image=$image --restart=Never --dry-run=client -o yaml
+}
+
+# 快速建立 deployment
+mkdeploy() {
+    local name=${1:-test-deploy}
+    local image=${2:-nginx}
+    local replicas=${3:-1}
+    kubectl create deployment $name --image=$image --replicas=$replicas --dry-run=client -o yaml
+}
+
+# 快速建立 service
+mksvc() {
+    local name=${1:-test-svc}
+    local port=${2:-80}
+    local target_port=${3:-80}
+    kubectl create service clusterip $name --tcp=$port:$target_port --dry-run=client -o yaml
+}
+
+# 快速檢查資源
+check() {
+    echo "=== Nodes ==="
+    kubectl get nodes -o wide
+    echo
+    echo "=== Pods ==="
+    kubectl get pods -A -o wide
+    echo
+    echo "=== Services ==="
+    kubectl get services -A
+    echo
+    echo "=== Deployments ==="
+    kubectl get deployments -A
+}
+
+# 快速清理
+cleanup() {
+    read -p "確定要清理當前 namespace 的所有資源？ (y/N): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        kubectl delete --all pods,services,deployments,configmaps,secrets
+    fi
+}
+
+# 考試計時器
+timer() {
+    local seconds=${1:-3600}  # 預設 1 小時
+    local start_time=$(date +%s)
+    local end_time=$((start_time + seconds))
+
+    echo "計時器啟動：$seconds 秒 ($(date -d @$end_time))"
+
+    while [ $(date +%s) -lt $end_time ]; do
+        local remaining=$((end_time - $(date +%s)))
+        local hours=$((remaining / 3600))
+        local minutes=$(((remaining % 3600) / 60))
+        local secs=$((remaining % 60))
+
+        printf "\r剩餘時間: %02d:%02d:%02d" $hours $minutes $secs
+        sleep 1
+    done
+
+    echo -e "\n時間到！"
+    # 發出響鈴
+    echo -e "\a"
+}
+
+# 環境變數
+export EDITOR=vim
+export KUBE_EDITOR=vim
+export TERM=xterm-256color
+
+# kubectl 自動完成
+if command -v kubectl > /dev/null 2>&1; then
+    source <(kubectl completion bash)
+    complete -F __start_kubectl k
+fi
+
+# helm 自動完成
+if command -v helm > /dev/null 2>&1; then
+    source <(helm completion bash)
+fi
+
+# 歡迎訊息
+echo "Kubernetes 考試環境已準備就緒！"
+echo "常用指令："
+echo "  k          - kubectl 別名"
+echo "  kns <名稱> - 切換 namespace"
+echo "  check      - 檢查叢集狀態"
+echo "  timer <秒> - 啟動考試計時器"
+echo "  mkpod      - 快速建立 pod YAML"
+echo "  mkdeploy   - 快速建立 deployment YAML"
+echo "  mksvc      - 快速建立 service YAML"
+echo ""

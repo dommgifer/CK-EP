@@ -1,0 +1,62 @@
+# T091: Bastion Container SSH 服務配置
+# 專為 Kubernetes 考試環境設計的 SSH 配置
+
+# 基本設定
+Port 22
+ListenAddress 0.0.0.0
+Protocol 2
+
+# 主機金鑰
+HostKey /etc/ssh/ssh_host_rsa_key
+HostKey /etc/ssh/ssh_host_ecdsa_key
+HostKey /etc/ssh/ssh_host_ed25519_key
+
+# 登入設定
+LoginGraceTime 120
+PermitRootLogin yes
+StrictModes yes
+MaxAuthTries 6
+MaxSessions 10
+
+# 驗證方式
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+PasswordAuthentication yes
+PermitEmptyPasswords no
+ChallengeResponseAuthentication no
+
+# 會話設定
+TCPKeepAlive yes
+ClientAliveInterval 60
+ClientAliveCountMax 3
+
+# X11 轉發（考試可能需要）
+X11Forwarding yes
+X11DisplayOffset 10
+X11UseLocalhost yes
+
+# 環境設定
+AcceptEnv LANG LC_* KUBECONFIG
+PrintMotd no
+PrintLastLog yes
+
+# 安全設定
+AllowUsers root exam
+DenyUsers nobody
+PermitUserEnvironment no
+
+# 日誌設定
+SyslogFacility AUTH
+LogLevel INFO
+
+# SFTP 子系統
+Subsystem sftp /usr/lib/openssh/sftp-server
+
+# 考試專用設定
+Banner /etc/ssh/banner
+MaxStartups 10:30:100
+
+# 連線限制
+AllowTcpForwarding yes
+GatewayPorts no
+PermitTunnel no

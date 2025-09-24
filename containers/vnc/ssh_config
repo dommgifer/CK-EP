@@ -1,0 +1,35 @@
+# SSH 客戶端配置檔案 - 用於考試環境
+# 連線到 Bastion 容器的預設配置
+
+Host bastion
+    HostName bastion
+    User root
+    Port 22
+    IdentityFile ~/.ssh/id_rsa
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    LogLevel ERROR
+    ConnectTimeout 10
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+
+Host bastion-*
+    HostName %h
+    User root
+    Port 22
+    IdentityFile ~/.ssh/id_rsa
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    LogLevel ERROR
+    ConnectTimeout 10
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+
+# 預設設定
+Host *
+    ForwardAgent yes
+    Compression yes
+    TCPKeepAlive yes
+    ControlMaster auto
+    ControlPath ~/.ssh/ssh-%r@%h:%p
+    ControlPersist 10m

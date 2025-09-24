@@ -1,0 +1,100 @@
+" Kubernetes 考試環境專用 vim 配置
+
+" 基本設定
+set nocompatible
+set number
+set relativenumber
+set ruler
+set showcmd
+set showmatch
+set hlsearch
+set incsearch
+set ignorecase
+set smartcase
+set autoindent
+set smartindent
+set expandtab
+set tabstop=2
+set softtabstop=2
+set shiftwidth=2
+set wrap
+set linebreak
+set encoding=utf-8
+set fileformat=unix
+
+" 語法高亮
+syntax on
+
+" 顏色主題
+colorscheme default
+set background=dark
+
+" 文件類型檢測
+filetype on
+filetype plugin on
+filetype indent on
+
+" YAML 文件特殊設定（Kubernetes 主要格式）
+autocmd FileType yaml setlocal ts=2 sts=2 sw=2 expandtab indentkeys-=<:>
+
+" 快捷鍵映射
+" 常用 Kubernetes 資源範本
+nnoremap <leader>kp :-1read ~/.vim/templates/pod.yaml<CR>
+nnoremap <leader>kd :-1read ~/.vim/templates/deployment.yaml<CR>
+nnoremap <leader>ks :-1read ~/.vim/templates/service.yaml<CR>
+nnoremap <leader>kc :-1read ~/.vim/templates/configmap.yaml<CR>
+
+" 搜尋和導航增強
+nnoremap <leader>h :noh<CR>
+nnoremap <leader>w :w<CR>
+nnoremap <leader>q :q<CR>
+
+" 視窗分割導航
+nnoremap <C-h> <C-w>h
+nnoremap <C-j> <C-w>j
+nnoremap <C-k> <C-w>k
+nnoremap <C-l> <C-w>l
+
+" 快速編輯常用文件
+nnoremap <leader>ev :vsplit ~/.vimrc<CR>
+nnoremap <leader>eb :vsplit ~/.bashrc<CR>
+
+" 狀態列設定
+set laststatus=2
+set statusline=
+set statusline+=%f         " 文件名
+set statusline+=%m         " 修改標記
+set statusline+=%=         " 右對齊
+set statusline+=%y         " 文件類型
+set statusline+=\ %c       " 列號
+set statusline+=\/%l       " 行號
+set statusline+=\/         " 分隔符
+set statusline+=%L         " 總行數
+
+" 自動補全設定
+set wildmenu
+set wildmode=longest,list,full
+
+" 備份和交換文件
+set nobackup
+set noswapfile
+set undofile
+set undodir=~/.vim/undo
+
+" 建立必要目錄
+if !isdirectory($HOME."/.vim/undo")
+    call mkdir($HOME."/.vim/undo", "p", 0700)
+endif
+
+" 特殊文件處理
+autocmd BufNewFile,BufRead *.yaml,*.yml set filetype=yaml
+autocmd BufNewFile,BufRead Dockerfile* set filetype=dockerfile
+
+" 考試模式設定
+if exists("$EXAM_MODE")
+    " 考試模式下的特殊設定
+    set mouse=
+    set noswapfile
+    set nobackup
+    set noundofile
+endif
