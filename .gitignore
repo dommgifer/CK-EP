@@ -109,3 +109,4 @@ CLAUDE.md
 configs/kubernetes/kubespray-configs/*
 services/remote-desktop/ssh-keys
 docs/*
+.specify
