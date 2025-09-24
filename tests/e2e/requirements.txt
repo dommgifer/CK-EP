@@ -1,0 +1,18 @@
+# E2E 測試依賴套件
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-timeout>=2.1.0
+httpx>=0.24.0
+selenium>=4.0.0
+docker>=6.0.0
+requests>=2.28.0
+
+# Chrome WebDriver 支援
+webdriver-manager>=3.8.0
+
+# 測試報告
+pytest-html>=3.1.0
+pytest-cov>=4.0.0
+
+# 效能測試
+pytest-benchmark>=4.0.0
