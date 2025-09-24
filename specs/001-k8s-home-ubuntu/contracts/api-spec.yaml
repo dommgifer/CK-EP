@@ -1,0 +1,909 @@
+openapi: 3.0.3
+info:
+  title: Kubernetes 考試模擬器 API
+  description: 提供完整的 Kubernetes 認證考試模擬功能
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@k8s-exam-simulator.local
+
+servers:
+  - url: /api/v1
+    description: API 基礎路徑 (透過 nginx 反向代理)
+
+paths:
+  # VM 配置管理
+  /vm-configs:
+    get:
+      summary: 取得所有 VM 配置
+      tags: [VM Management]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VMClusterConfig'
+    post:
+      summary: 建立新的 VM 配置
+      tags: [VM Management]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVMConfigRequest'
+      responses:
+        '201':
+          description: 建立成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VMClusterConfig'
+        '400':
+          description: 請求參數錯誤
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /vm-configs/{config_id}:
+    get:
+      summary: 取得指定 VM 配置
+      tags: [VM Management]
+      parameters:
+        - name: config_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VMClusterConfig'
+        '404':
+          description: 配置不存在
+    put:
+      summary: 更新 VM 配置
+      tags: [VM Management]
+      parameters:
+        - name: config_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateVMConfigRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VMClusterConfig'
+    delete:
+      summary: 刪除 VM 配置
+      tags: [VM Management]
+      parameters:
+        - name: config_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: 刪除成功
+        '409':
+          description: 配置正在使用中
+
+  /vm-configs/{config_id}/test-connection:
+    post:
+      summary: 測試 VM 連線
+      tags: [VM Management]
+      parameters:
+        - name: config_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 連線測試完成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionTestResult'
+
+  # 題組管理
+  /question-sets:
+    get:
+      summary: 取得所有題組
+      tags: [Question Management]
+      parameters:
+        - name: exam_type
+          in: query
+          schema:
+            type: string
+            enum: [CKA, CKAD, CKS]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/QuestionSet'
+
+  /question-sets/{set_id}:
+    get:
+      summary: 取得指定題組詳情
+      tags: [Question Management]
+      parameters:
+        - name: set_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionSetDetail'
+
+  /question-sets/reload:
+    post:
+      summary: 重載題組檔案
+      description: 從檔案系統重新載入所有題組資料
+      tags: [Question Management]
+      responses:
+        '200':
+          description: 重載成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "題組檔案重載成功"
+                  loaded_count:
+                    type: integer
+                    description: 成功載入的題組數量
+                  errors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        file_path:
+                          type: string
+                        error_message:
+                          type: string
+                  reloaded_at:
+                    type: string
+                    format: date-time
+
+  # 考試會話管理
+  /exam-sessions:
+    get:
+      summary: 取得考試會話列表
+      tags: [Exam Session]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [preparing, active, paused, completed, failed]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExamSession'
+    post:
+      summary: 建立新的考試會話
+      tags: [Exam Session]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExamSessionRequest'
+      responses:
+        '201':
+          description: 建立成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExamSession'
+        '409':
+          description: 已有活動會話存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /exam-sessions/{session_id}:
+    get:
+      summary: 取得考試會話詳情
+      tags: [Exam Session]
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExamSessionDetail'
+    patch:
+      summary: 更新考試會話狀態
+      tags: [Exam Session]
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateExamSessionRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExamSession'
+
+  /exam-sessions/{session_id}/start:
+    post:
+      summary: 開始考試會話
+      tags: [Exam Session]
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 考試開始成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExamSession'
+        '400':
+          description: 環境未準備好或狀態錯誤
+
+  /exam-sessions/{session_id}/pause:
+    post:
+      summary: 暫停考試會話
+      tags: [Exam Session]
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 暫停成功
+
+  /exam-sessions/{session_id}/resume:
+    post:
+      summary: 恢復考試會話
+      tags: [Exam Session]
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 恢復成功
+
+  /exam-sessions/{session_id}/complete:
+    post:
+      summary: 完成考試會話
+      tags: [Exam Session]
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 考試完成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExamResult'
+
+  # 環境管理
+  /exam-sessions/{session_id}/environment/status:
+    get:
+      summary: 取得環境狀態
+      tags: [Environment]
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvironmentStatus'
+
+  /exam-sessions/{session_id}/environment/provision:
+    post:
+      summary: 配置考試環境
+      tags: [Environment]
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '202':
+          description: 配置已開始
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProvisioningStatus'
+
+  # VNC 連線
+  /exam-sessions/{session_id}/vnc/token:
+    post:
+      summary: 取得 VNC 連線令牌
+      tags: [VNC Access]
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VNCToken'
+        '400':
+          description: 環境未就緒
+
+  # 題目和評分
+  /exam-sessions/{session_id}/questions/{question_id}/submit:
+    post:
+      summary: 提交題目答案
+      tags: [Question Scoring]
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: question_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 評分完成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionResult'
+
+  /exam-sessions/{session_id}/navigation:
+    patch:
+      summary: 更新題目導航位置
+      tags: [Question Navigation]
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                question_index:
+                  type: integer
+                  minimum: 0
+              required: [question_index]
+      responses:
+        '200':
+          description: 導航更新成功
+
+components:
+  schemas:
+    VMClusterConfig:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        master_nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/VMNode'
+        worker_nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/VMNode'
+        ssh_username:
+          type: string
+        connection_status:
+          type: string
+          enum: [untested, success, failed]
+        last_tested_at:
+          type: string
+          format: date-time
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    VMNode:
+      type: object
+      properties:
+        ip_address:
+          type: string
+          format: ipv4
+        hostname:
+          type: string
+          nullable: true
+        role:
+          type: string
+          enum: [master, worker]
+        ssh_port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          default: 22
+
+    CreateVMConfigRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        master_nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/VMNode'
+          minItems: 1
+        worker_nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/VMNode'
+        ssh_username:
+          type: string
+        ssh_private_key:
+          type: string
+          description: SSH 私鑰內容 (base64 編碼)
+        ssh_password:
+          type: string
+          nullable: true
+      required: [name, master_nodes, ssh_username]
+
+    UpdateVMConfigRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        master_nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/VMNode'
+        worker_nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/VMNode'
+        ssh_username:
+          type: string
+        ssh_private_key:
+          type: string
+          nullable: true
+        ssh_password:
+          type: string
+          nullable: true
+
+    ConnectionTestResult:
+      type: object
+      properties:
+        config_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [success, failed]
+        tested_at:
+          type: string
+          format: date-time
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              node:
+                $ref: '#/components/schemas/VMNode'
+              connected:
+                type: boolean
+              error_message:
+                type: string
+                nullable: true
+              response_time_ms:
+                type: number
+                nullable: true
+
+    QuestionSet:
+      type: object
+      properties:
+        set_id:
+          type: string
+          example: "cka-001"
+        exam_type:
+          type: string
+          enum: [CKA, CKAD, CKS]
+        name:
+          type: string
+        description:
+          type: string
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        time_limit:
+          type: integer
+          description: 時間限制（分鐘）
+        total_questions:
+          type: integer
+        passing_score:
+          type: integer
+          description: 及格分數百分比
+        version:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        loaded_at:
+          type: string
+          format: date-time
+          description: 檔案載入時間
+        file_modified_at:
+          type: string
+          format: date-time
+          description: 檔案修改時間
+
+    QuestionSetDetail:
+      allOf:
+        - $ref: '#/components/schemas/QuestionSet'
+        - type: object
+          properties:
+            questions:
+              type: array
+              items:
+                $ref: '#/components/schemas/Question'
+            topics:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  weight:
+                    type: integer
+                  questions:
+                    type: integer
+                  description:
+                    type: string
+            exam_domains:
+              type: array
+              items:
+                type: object
+                properties:
+                  domain:
+                    type: string
+                  percentage:
+                    type: integer
+                  topics:
+                    type: array
+                    items:
+                      type: string
+
+    Question:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 題目編號
+        content:
+          type: string
+          description: 題目內容 (Markdown 格式)
+        weight:
+          type: number
+          description: 題目權重
+        kubernetes_objects:
+          type: array
+          items:
+            type: string
+          description: 涉及的 Kubernetes 物件
+        hints:
+          type: array
+          items:
+            type: string
+        verification_scripts:
+          type: array
+          items:
+            type: string
+          description: 驗證腳本檔案名稱
+        preparation_scripts:
+          type: array
+          items:
+            type: string
+          description: 準備腳本檔案名稱
+
+    ExamSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        exam_type:
+          type: string
+          enum: [CKA, CKAD, CKS]
+        question_set_id:
+          type: string
+        status:
+          type: string
+          enum: [preparing, active, paused, completed, failed]
+        start_time:
+          type: string
+          format: date-time
+          nullable: true
+        end_time:
+          type: string
+          format: date-time
+          nullable: true
+        time_limit_minutes:
+          type: integer
+        current_question_index:
+          type: integer
+        environment_status:
+          type: string
+          enum: [configuring, ready, error]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ExamSessionDetail:
+      allOf:
+        - $ref: '#/components/schemas/ExamSession'
+        - type: object
+          properties:
+            question_set:
+              $ref: '#/components/schemas/QuestionSetDetail'
+            vm_cluster_config:
+              $ref: '#/components/schemas/VMClusterConfig'
+            remaining_time_seconds:
+              type: integer
+              nullable: true
+
+    CreateExamSessionRequest:
+      type: object
+      properties:
+        exam_type:
+          type: string
+          enum: [CKA, CKAD, CKS]
+        question_set_id:
+          type: string
+        vm_cluster_config_id:
+          type: string
+          format: uuid
+      required: [exam_type, question_set_id, vm_cluster_config_id]
+
+    UpdateExamSessionRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [preparing, active, paused, completed, failed]
+        current_question_index:
+          type: integer
+          minimum: 0
+
+    EnvironmentStatus:
+      type: object
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [configuring, ready, error]
+        progress_percentage:
+          type: integer
+          minimum: 0
+          maximum: 100
+        current_step:
+          type: string
+        logs:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+                format: date-time
+              level:
+                type: string
+                enum: [info, warning, error]
+              message:
+                type: string
+        error_details:
+          type: string
+          nullable: true
+
+    ProvisioningStatus:
+      type: object
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        task_id:
+          type: string
+        status:
+          type: string
+          enum: [started, running, completed, failed]
+        message:
+          type: string
+
+    VNCToken:
+      type: object
+      properties:
+        token:
+          type: string
+        vnc_url:
+          type: string
+          format: uri
+        expires_at:
+          type: string
+          format: date-time
+
+    QuestionResult:
+      type: object
+      properties:
+        question_id:
+          type: string
+        score:
+          type: integer
+        max_score:
+          type: integer
+        verification_results:
+          type: array
+          items:
+            $ref: '#/components/schemas/VerificationResult'
+        time_spent_minutes:
+          type: integer
+        completed_at:
+          type: string
+          format: date-time
+
+    VerificationResult:
+      type: object
+      properties:
+        script_name:
+          type: string
+        exit_code:
+          type: integer
+        stdout:
+          type: string
+        stderr:
+          type: string
+        execution_time_seconds:
+          type: number
+        passed:
+          type: boolean
+        score:
+          type: number
+        executed_at:
+          type: string
+          format: date-time
+
+    ExamResult:
+      type: object
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        question_results:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuestionResult'
+        total_score:
+          type: integer
+        max_score:
+          type: integer
+        completion_time_minutes:
+          type: integer
+        status:
+          type: string
+          enum: [completed, timeout, failed]
+        created_at:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
