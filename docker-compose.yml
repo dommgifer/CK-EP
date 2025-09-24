@@ -80,7 +80,7 @@ services:
     networks:
       - exam-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -256,7 +256,7 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: 172.20.0.0/16
-          gateway: 172.20.0.1
+        - subnet: 172.25.0.0/16
+          gateway: 172.25.0.1
     labels:
       - "com.k8s-exam.network=main"
