@@ -1,0 +1,262 @@
+# T093: Docker Compose 服務整合配置
+# Kubernetes 考試模擬器完整環境編排
+
+services:
+  # ====================================
+  # 核心基礎設施服務
+  # ====================================
+
+  # nginx 反向代理 - 統一入口點
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: k8s-exam-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - frontend_build:/usr/share/nginx/html/static:ro
+      - ./nginx/logs:/var/log/nginx
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - exam-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "com.k8s-exam.component=proxy"
+      - "com.k8s-exam.version=1.0.0"
+
+  # 後端 FastAPI 服務
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    container_name: k8s-exam-backend
+    environment:
+      # 應用設定
+      - PYTHONPATH=/app
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+
+      # 資料庫設定
+      - DATABASE_URL=sqlite:///./data/exam_simulator.db
+      - REDIS_URL=redis://redis:6379/0
+
+      # 儲存設定
+      - DATA_DIR=/app/data
+      - QUESTION_SETS_DIR=/app/data/question_sets
+      - VM_CONFIGS_DIR=/app/data/vm_configs
+      - SSH_KEYS_DIR=/app/data/ssh_keys
+
+      # Docker 設定
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - KUBESPRAY_IMAGE=quay.io/kubespray/kubespray:v2.23.1
+
+      # 網路設定
+      - DOCKER_NETWORK=k8s-exam-simulator_exam-network
+
+      # 安全設定
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
+      - CORS_ORIGINS=http://localhost,http://localhost:3000
+    volumes:
+      - ./data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./backend/logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - exam-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    labels:
+      - "com.k8s-exam.component=backend"
+      - "com.k8s-exam.version=1.0.0"
+
+  # 前端 React 應用建置
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: builder
+    container_name: k8s-exam-frontend-build
+    volumes:
+      - frontend_build:/app/dist
+    restart: "no"
+    networks:
+      - exam-network
+    labels:
+      - "com.k8s-exam.component=frontend-build"
+      - "com.k8s-exam.version=1.0.0"
+
+  # Redis 快取和會話儲存
+  redis:
+    image: redis:7.2-alpine
+    container_name: k8s-exam-redis
+    command: ["redis-server", "/etc/redis/redis.conf"]
+    ports:
+      - "127.0.0.1:6379:6379"  # 只在本機介面監聽
+    volumes:
+      - redis_data:/data
+      - ./redis/redis.conf:/etc/redis/redis.conf:ro
+      - ./redis/logs:/var/log/redis
+    restart: unless-stopped
+    networks:
+      - exam-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "com.k8s-exam.component=cache"
+      - "com.k8s-exam.version=1.0.0"
+
+  # ====================================
+  # 考試環境容器（動態管理）
+  # ====================================
+
+  # Kubespray 部署服務（按需啟動）
+  kubespray:
+    image: quay.io/kubespray/kubespray:v2.23.1
+    container_name: k8s-exam-kubespray
+    volumes:
+      - ./data/kubespray_configs:/kubespray/inventory
+      - ./data/ssh_keys:/root/.ssh:ro
+      - kubespray_cache:/tmp
+    working_dir: /kubespray
+    command: ["tail", "-f", "/dev/null"]  # 保持容器運行
+    restart: unless-stopped
+    networks:
+      - exam-network
+    profiles:
+      - kubespray
+    labels:
+      - "com.k8s-exam.component=kubespray"
+      - "com.k8s-exam.version=1.0.0"
+
+# ====================================
+# 動態容器範本（由後端服務管理）
+# ====================================
+# 注意：以下容器不會自動啟動，而是由後端服務根據考試會話動態建立
+
+  # VNC 桌面容器範本
+  vnc-template:
+    build:
+      context: ./containers/vnc
+      dockerfile: Dockerfile
+    image: k8s-exam/vnc:latest
+    container_name: vnc-template
+    environment:
+      - VNC_PW=${VNC_PASSWORD:-examvnc}
+      - VNC_RESOLUTION=${VNC_RESOLUTION:-1280x1024}
+      - DISPLAY=:1
+      - VNC_PORT=5901
+      - NO_VNC_PORT=6901
+      - BASTION_HOST=bastion-${SESSION_ID}
+    volumes:
+      - ./data/ssh_keys:/headless/.ssh:ro
+      - vnc_workspace:/headless/workspace
+    networks:
+      - exam-network
+    profiles:
+      - template
+    labels:
+      - "com.k8s-exam.component=vnc-template"
+      - "com.k8s-exam.type=exam-environment"
+
+  # Bastion 工具容器範本
+  bastion-template:
+    build:
+      context: ./containers/bastion
+      dockerfile: Dockerfile
+    image: k8s-exam/bastion:latest
+    container_name: bastion-template
+    environment:
+      - KUBECONFIG=/kubeconfig/config
+      - TERM=xterm-256color
+      - SHELL=/bin/bash
+      - TZ=${TZ:-UTC}
+    volumes:
+      - ./data/ssh_keys:/root/.ssh:ro
+      - ./data/question_sets:/workspace/question_sets:ro
+      - bastion_workspace:/workspace
+      - kubeconfig_volume:/kubeconfig
+    working_dir: /workspace
+    networks:
+      - exam-network
+    profiles:
+      - template
+    labels:
+      - "com.k8s-exam.component=bastion-template"
+      - "com.k8s-exam.type=exam-environment"
+
+# ====================================
+# 資料卷定義
+# ====================================
+volumes:
+  # 持久化資料
+  redis_data:
+    driver: local
+    labels:
+      - "com.k8s-exam.data=persistent"
+
+  # 建置產出
+  frontend_build:
+    driver: local
+    labels:
+      - "com.k8s-exam.data=build"
+
+  # 快取資料
+  kubespray_cache:
+    driver: local
+    labels:
+      - "com.k8s-exam.data=cache"
+
+  # 考試環境工作區
+  vnc_workspace:
+    driver: local
+    labels:
+      - "com.k8s-exam.data=workspace"
+
+  bastion_workspace:
+    driver: local
+    labels:
+      - "com.k8s-exam.data=workspace"
+
+  kubeconfig_volume:
+    driver: local
+    labels:
+      - "com.k8s-exam.data=config"
+
+# ====================================
+# 網路定義
+# ====================================
+networks:
+  exam-network:
+    name: k8s-exam-network
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
+    labels:
+      - "com.k8s-exam.network=main"
