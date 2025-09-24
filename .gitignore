@@ -110,3 +110,5 @@ configs/kubernetes/kubespray-configs/*
 services/remote-desktop/ssh-keys
 docs/*
 .specify
+question-set-examples/*
+front-end-design/*
