@@ -1,0 +1,5 @@
+# 簡化的測試需求
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+redis==5.0.1
+python-multipart==0.0.6
