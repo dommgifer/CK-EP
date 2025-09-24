@@ -1,0 +1,154 @@
+{
+  "questions": [
+    {
+      "id": "ckad-001",
+      "title": "建立 Pod 和 Service",
+      "description": "建立一個名為 'webapp' 的 Pod，使用 nginx:1.20 映像，並建立對應的 Service",
+      "points": 30,
+      "time_limit_minutes": 20,
+      "instructions": [
+        "在 default 命名空間中建立一個名為 'webapp' 的 Pod",
+        "Pod 使用 nginx:1.20 映像",
+        "Pod 監聽 80 埠",
+        "建立一個名為 'webapp-service' 的 Service 來暴露這個 Pod",
+        "Service 類型為 ClusterIP，監聽 8080 埠",
+        "確保 Pod 正常運行並可透過 Service 存取"
+      ],
+      "hints": [
+        "使用 kubectl run 或 YAML 檔案建立 Pod",
+        "使用 kubectl expose 或 YAML 檔案建立 Service",
+        "檢查 Pod 狀態：kubectl get pods",
+        "測試 Service：kubectl port-forward service/webapp-service 8080:8080"
+      ],
+      "scoring": {
+        "total_points": 30,
+        "rules": [
+          {
+            "type": "resource_exists",
+            "resource_type": "pod",
+            "resource_name": "webapp",
+            "namespace": "default",
+            "points": 10
+          },
+          {
+            "type": "pod_running",
+            "pod_name": "webapp",
+            "namespace": "default",
+            "points": 10
+          },
+          {
+            "type": "resource_exists",
+            "resource_type": "service",
+            "resource_name": "webapp-service",
+            "namespace": "default",
+            "points": 5
+          },
+          {
+            "type": "service_accessible",
+            "service_name": "webapp-service",
+            "namespace": "default",
+            "port": "8080",
+            "points": 5
+          }
+        ]
+      }
+    },
+    {
+      "id": "ckad-002",
+      "title": "Deployment 和 ConfigMap",
+      "description": "建立一個 Deployment 使用 ConfigMap 來配置應用程式",
+      "points": 40,
+      "time_limit_minutes": 30,
+      "instructions": [
+        "建立一個名為 'app-config' 的 ConfigMap，包含以下鍵值對：",
+        "  - database_host: 'mysql.example.com'",
+        "  - database_port: '3306'",
+        "  - app_name: 'my-webapp'",
+        "建立一個名為 'webapp-deployment' 的 Deployment",
+        "Deployment 使用 nginx:alpine 映像，副本數為 3",
+        "將 ConfigMap 掛載為環境變數",
+        "確保所有 Pod 正常運行"
+      ],
+      "hints": [
+        "使用 kubectl create configmap 建立 ConfigMap",
+        "在 Deployment YAML 中使用 envFrom 引用 ConfigMap",
+        "檢查 Pod 環境變數：kubectl exec <pod> -- env"
+      ],
+      "scoring": {
+        "total_points": 40,
+        "rules": [
+          {
+            "type": "resource_exists",
+            "resource_type": "configmap",
+            "resource_name": "app-config",
+            "namespace": "default",
+            "points": 10
+          },
+          {
+            "type": "resource_exists",
+            "resource_type": "deployment",
+            "resource_name": "webapp-deployment",
+            "namespace": "default",
+            "points": 10
+          },
+          {
+            "type": "custom_command",
+            "command": "kubectl get deployment webapp-deployment -o jsonpath='{.status.readyReplicas}'",
+            "expected_output": "3",
+            "points": 10
+          },
+          {
+            "type": "custom_command",
+            "command": "kubectl get pods -l app=webapp-deployment --field-selector=status.phase=Running | wc -l",
+            "expected_output": "3",
+            "points": 10
+          }
+        ]
+      }
+    },
+    {
+      "id": "ckad-003",
+      "title": "Multi-container Pod",
+      "description": "建立一個包含多個容器的 Pod，實現 sidecar 模式",
+      "points": 30,
+      "time_limit_minutes": 25,
+      "instructions": [
+        "建立一個名為 'multi-container-pod' 的 Pod",
+        "主容器：nginx:1.20，名稱為 'web'",
+        "Sidecar 容器：busybox:1.35，名稱為 'sidecar'",
+        "Sidecar 容器執行指令：'sleep 3600'",
+        "兩個容器共享一個 Volume，掛載路徑為 /shared-data",
+        "Volume 類型為 emptyDir"
+      ],
+      "hints": [
+        "在 Pod 規格中定義多個容器",
+        "使用 volumes 和 volumeMounts 共享資料",
+        "檢查所有容器狀態：kubectl get pod multi-container-pod -o wide"
+      ],
+      "scoring": {
+        "total_points": 30,
+        "rules": [
+          {
+            "type": "resource_exists",
+            "resource_type": "pod",
+            "resource_name": "multi-container-pod",
+            "namespace": "default",
+            "points": 10
+          },
+          {
+            "type": "custom_command",
+            "command": "kubectl get pod multi-container-pod -o jsonpath='{.spec.containers[*].name}' | wc -w",
+            "expected_output": "2",
+            "points": 10
+          },
+          {
+            "type": "custom_command",
+            "command": "kubectl get pod multi-container-pod -o jsonpath='{.status.containerStatuses[?(@.ready==true)].name}' | wc -w",
+            "expected_output": "2",
+            "points": 10
+          }
+        ]
+      }
+    }
+  ]
+}

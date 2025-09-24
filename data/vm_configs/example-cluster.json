@@ -1,0 +1,48 @@
+{
+  "id": "example-cluster",
+  "name": "範例 Kubernetes 叢集",
+  "description": "用於測試的範例 Kubernetes 叢集配置",
+  "nodes": [
+    {
+      "name": "k8s-master",
+      "ip": "192.168.1.10",
+      "role": "master",
+      "specs": {
+        "cpu_cores": 2,
+        "memory_gb": 4,
+        "disk_gb": 50
+      }
+    },
+    {
+      "name": "k8s-worker1",
+      "ip": "192.168.1.11",
+      "role": "worker",
+      "specs": {
+        "cpu_cores": 2,
+        "memory_gb": 4,
+        "disk_gb": 50
+      }
+    },
+    {
+      "name": "k8s-worker2",
+      "ip": "192.168.1.12",
+      "role": "worker",
+      "specs": {
+        "cpu_cores": 2,
+        "memory_gb": 4,
+        "disk_gb": 50
+      }
+    }
+  ],
+  "ssh_config": {
+    "user": "ubuntu",
+    "private_key_path": "/root/.ssh/id_rsa",
+    "port": 22
+  },
+  "network": {
+    "pod_subnet": "10.244.0.0/16",
+    "service_subnet": "10.96.0.0/12"
+  },
+  "created_at": "2025-09-23T00:00:00Z",
+  "updated_at": "2025-09-23T00:00:00Z"
+}

@@ -1,0 +1,144 @@
+# Kubespray 基礎配置範本
+# 此檔案為 Kubernetes 叢集的基本配置範本，適用於 CKA/CKAD/CKS 考試環境
+
+## 叢集基本設定
+cluster_name: "k8s-exam-cluster"
+kube_version: "v1.29.1"
+
+# API Server 配置
+kube_api_anonymous_auth: false
+kube_api_bind_address: "0.0.0.0"
+kube_apiserver_node_port_range: "30000-32767"
+
+# etcd 配置
+etcd_deployment_type: docker
+etcd_memory_limit: "512M"
+etcd_quota_backend_bytes: "2147483648"  # 2GB
+
+# Container Runtime 配置
+container_manager: containerd
+containerd_version: "1.7.11"
+containerd_registries:
+  "docker.io":
+    - "https://registry-1.docker.io"
+  "quay.io":
+    - "https://quay.io"
+  "k8s.gcr.io":
+    - "https://registry.k8s.io"
+    - "https://k8s.gcr.io"
+
+# Kubelet 配置
+kubelet_deployment_type: host
+kubelet_max_pods: 110
+kubelet_pod_infra_container_image: "registry.k8s.io/pause:3.9"
+
+# DNS 配置
+dns_mode: coredns
+enable_nodelocaldns: false
+coredns_version: "v1.11.1"
+coredns_replicas: 2
+
+# Networking
+kube_network_plugin: calico
+enable_dual_stack_networks: false
+kube_service_addresses: "10.233.0.0/18"
+kube_pods_subnet: "10.233.64.0/18"
+kube_network_node_prefix: 24
+
+# Calico 特定配置
+calico_version: "v3.27.0"
+calico_cni_version: "v3.27.0"
+calico_policy_version: "v3.27.0"
+calico_typha_version: "v3.27.0"
+calico_node_version: "v3.27.0"
+calico_ctl_version: "v3.27.0"
+calico_ip_auto_method: "first-found"
+calico_ipip_mode: "Always"
+calico_vxlan_mode: "Never"
+calico_node_mesh_enabled: true
+
+# 授權和安全
+authorization_modes: ['Node', 'RBAC']
+rbac_enabled: true
+
+# 審計日誌
+audit_log_enabled: false
+
+# Kubernetes 功能閘道
+kube_feature_gates:
+  - "CSIMigration=true"
+  - "InTreePluginAWSUnregister=true"
+  - "InTreePluginAzureDiskUnregister=true"
+  - "InTreePluginAzureFileUnregister=true"
+  - "InTreePluginGCEUnregister=true"
+  - "InTreePluginOpenStackUnregister=true"
+  - "InTreePluginvSphereUnregister=true"
+
+# Node 資源保留
+kube_reserved: true
+kube_memory_reserved: "256Mi"
+kube_cpu_reserved: "100m"
+system_memory_reserved: "256Mi"
+system_cpu_reserved: "100m"
+
+# 升級策略
+drain_nodes: true
+drain_grace_period: 30
+drain_timeout: 300
+
+# 本地儲存
+local_volume_provisioner_enabled: false
+
+# Metrics Server
+metrics_server_enabled: true
+metrics_server_version: "v0.7.0"
+
+# Dashboard (考試通常不需要，但可能有用)
+dashboard_enabled: false
+
+# Ingress Controller
+ingress_nginx_enabled: true
+ingress_nginx_version: "v1.9.5"
+
+# CSI 驅動程式
+csi_snapshot_controller_enabled: false
+
+# 補充管理配置
+supplementary_addresses_in_ssl_keys: []
+
+# Docker 配置（如果使用）
+docker_daemon_graph: "/var/lib/docker"
+docker_log_driver: "json-file"
+docker_log_opts:
+  max-size: "50m"
+  max-file: "5"
+
+# 檔案系統
+docker_storage_options: -s overlay2
+
+# 日誌配置
+bin_dir: /usr/local/bin
+system_namespace: kube-system
+
+# 憑證配置
+certificates_key_size: 2048
+certificates_duration: 36500
+
+# 健康檢查
+kubelet_status_update_frequency: 10s
+kubelet_sync_frequency: 1m
+kubelet_node_status_update_frequency: 10s
+
+# 其他
+kubectl_localhost: true
+kubeconfig_localhost: true
+artifacts_dir: "{{ inventory_dir }}/artifacts"
+
+# Node 標籤
+node_labels: {}
+
+# Node Taints
+node_taints: []
+
+# 考試環境特定配置
+exam_mode: true  # 用於標識考試環境

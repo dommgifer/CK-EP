@@ -1,0 +1,62 @@
+{
+  "exam_type": "CKA",
+  "set_id": "001",
+  "name": "CKA 模擬考試 001 - 叢集管理基礎",
+  "description": "涵蓋 CKA 考試核心主題：叢集架構、安裝和配置、故障排除、工作負載和排程、服務和網路、儲存、安全性",
+  "difficulty": "medium",
+  "time_limit": 120,
+  "total_questions": 8,
+  "passing_score": 66,
+  "created_date": "2025-09-24",
+  "version": "1.0",
+  "tags": ["cluster-management", "troubleshooting", "networking", "storage", "security"],
+  "topics": [
+    {
+      "name": "叢集架構、安裝和配置",
+      "weight": 25,
+      "description": "管理基於角色的存取控制 (RBAC)、使用 Kubeadm 安裝基本叢集、管理高可用性的 Kubernetes 叢集、佈建底層基礎設施以部署 Kubernetes 叢集、使用 Kubeadm 執行版本升級、實作 etcd 備份和還原"
+    },
+    {
+      "name": "工作負載和排程",
+      "weight": 15,
+      "description": "了解部署以及如何執行滾動更新和回滾、使用 ConfigMaps 和 Secrets 配置應用程式、了解如何擴展應用程式、了解用於建立健全的、自我修復的應用程式部署的基本設定、了解資源限制如何影響 Pod 排程、了解 Pod 的干擾和排程"
+    },
+    {
+      "name": "服務和網路",
+      "weight": 20,
+      "description": "了解主機網路配置、了解 Pods 之間的連線、了解 ClusterIP、NodePort、LoadBalancer 服務類型和端點、了解如何使用 Ingress 控制器和 Ingress 資源、了解如何配置和使用 CoreDNS、選擇適當的容器網路介面外掛程式"
+    },
+    {
+      "name": "儲存",
+      "weight": 10,
+      "description": "了解儲存類別、持久磁碟區、了解磁碟區模式、存取模式和回收原則、了解持久磁碟區聲明基本設定、了解 Kubernetes 儲存物件、了解如何配置具有持久儲存的應用程式"
+    },
+    {
+      "name": "故障排除",
+      "weight": 30,
+      "description": "評估叢集和節點記錄、了解如何監控應用程式、管理容器標準輸出和標準錯誤記錄、故障排除應用程式失敗、故障排除叢集元件失敗、故障排除網路"
+    }
+  ],
+  "exam_domains": [
+    {
+      "domain": "叢集架構、安裝和配置",
+      "percentage": 25
+    },
+    {
+      "domain": "工作負載和排程",
+      "percentage": 15
+    },
+    {
+      "domain": "服務和網路",
+      "percentage": 20
+    },
+    {
+      "domain": "儲存",
+      "percentage": 10
+    },
+    {
+      "domain": "故障排除",
+      "percentage": 30
+    }
+  ]
+}
