@@ -46,6 +46,11 @@ export default defineConfig({
       'react-router-dom',
       '@tanstack/react-query',
       'lucide-react',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-select',
+      '@radix-ui/react-label',
+      '@radix-ui/react-slot',
+      '@radix-ui/react-radio-group',
     ],
   },
 })

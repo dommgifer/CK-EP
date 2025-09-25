@@ -8,7 +8,7 @@ import { mockQuestions, examConfig } from '../data/questions'
 import { Card } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { ExamSetupDialog } from '../components/ExamSetupDialog'
-import heroImage from '../assets/k8s-hero.jpg'
+// import heroImage from '../assets/k8s-hero.jpg'
 
 const HomePage = () => {
   const [examStarted, setExamStarted] = useState(false)
@@ -32,8 +32,7 @@ const HomePage = () => {
       {/* Hero Section */}
       <div className="relative h-screen flex items-center justify-center">
         <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{ backgroundImage: `url(${heroImage})` }}
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat bg-gray-800"
         >
           <div className="absolute inset-0 bg-background/80" />
         </div>

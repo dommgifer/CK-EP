@@ -19,7 +19,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # 安裝所有依賴（包括開發依賴用於建置）
-RUN npm install --include=dev && \
+RUN npm ci --include=dev && \
     npm cache clean --force
 
 # 複製應用程式碼
@@ -27,6 +27,9 @@ COPY --chown=nextjs:nodejs . .
 
 # 建置應用
 RUN npm run build
+
+# 檢查建置結果
+RUN ls -la /app/dist/
 
 # 第二階段：生產映像
 FROM nginx:alpine as production
@@ -38,8 +41,14 @@ RUN apk add --no-cache dumb-init
 RUN addgroup -g 1001 -S nginx && \
     adduser -S nginx -u 1001 -G nginx
 
+# 建立必要的目錄
+RUN mkdir -p /usr/share/nginx/html
+
 # 從建置階段複製建置結果
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/dist/ /usr/share/nginx/html/
+
+# 驗證複製結果
+RUN ls -la /usr/share/nginx/html/
 
 # 複製 nginx 配置
 COPY nginx.conf /etc/nginx/nginx.conf
