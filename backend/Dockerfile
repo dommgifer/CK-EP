@@ -59,7 +59,7 @@ RUN mkdir -p /app/src /app/data \
 # 複製應用程式碼
 COPY --chown=appuser:appuser src/ ./src/
 
-# 建立資料目錄並設定權限（移除複製不存在的 data 目錄）
+# 建立資料目錄並設定權限 (將透過 volume 掛載)
 RUN mkdir -p data/{vm_configs,ssh_keys,kubespray_configs,question_sets,exam_results} \
     && chown -R appuser:appuser data/
 
