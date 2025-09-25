@@ -98,7 +98,14 @@ services:
       target: builder
     container_name: k8s-exam-frontend-build
     volumes:
-      - frontend_build:/app/dist
+      - frontend_build:/shared
+    command: sh -c "
+      echo '🚀 Starting frontend build sync...' &&
+      echo '📂 Copying build files to shared volume...' &&
+      cp -r /app/dist/* /shared/ &&
+      echo '✅ Frontend build sync completed!' &&
+      echo '📅 Sync timestamp:' $(date) &&
+      ls -la /shared/"
     restart: "no"
     networks:
       - exam-network
