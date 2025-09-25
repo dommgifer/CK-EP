@@ -1,0 +1,8 @@
+{
+  "exam_type": "CKS",
+  "set_id": "001",
+  "name": "CKS 模擬測驗 001 - 基礎安全強化",
+  "description": "涵蓋完整的 CKS 考試主題，包含 Pod Security、Network Policies、RBAC、系統強化、運行時安全等",
+  "time_limit": 120,
+  "passing_score": 66
+}
