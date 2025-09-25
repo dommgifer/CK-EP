@@ -23,24 +23,12 @@ class QuestionSetService:
 
     async def list_question_sets(
         self,
-        exam_type: Optional[str] = None,
-        difficulty: Optional[str] = None,
-        tags: Optional[List[str]] = None
+        exam_type: Optional[str] = None
     ) -> QuestionSetListResponse:
         """取得題組列表，支援篩選"""
         question_sets = self.file_manager.list_question_sets(
-            certification_type=exam_type,
-            difficulty=difficulty
+            certification_type=exam_type
         )
-
-        # 額外的標籤篩選
-        if tags:
-            filtered_sets = []
-            for qs in question_sets:
-                qs_tags = [tag.lower() for tag in qs.metadata.tags]
-                if any(tag.lower() in qs_tags for tag in tags):
-                    filtered_sets.append(qs)
-            question_sets = filtered_sets
 
         # 轉換為摘要格式
         summaries = [
@@ -49,27 +37,20 @@ class QuestionSetService:
                 exam_type=qs.exam_type,
                 name=qs.metadata.name,
                 description=qs.metadata.description,
-                difficulty=qs.metadata.difficulty,
                 time_limit=qs.metadata.time_limit,
-                total_questions=qs.metadata.total_questions,
                 passing_score=qs.metadata.passing_score,
-                version=qs.metadata.version,
-                tags=qs.metadata.tags
+                total_questions=len(qs.questions)  # 直接從問題數量計算
             )
             for qs in question_sets
         ]
 
         # 收集統計資訊
         all_sets = self.file_manager.get_all_question_sets()
-        exam_types = list(set(qs.exam_type for qs in all_sets.values()))
-        difficulties = list(set(qs.metadata.difficulty for qs in all_sets.values()))
 
         return QuestionSetListResponse(
             question_sets=summaries,
             total_count=len(all_sets),
-            filtered_count=len(summaries),
-            exam_types=exam_types,
-            difficulties=difficulties
+            filtered_count=len(summaries)
         )
 
     async def get_question_set(self, set_id: str) -> Optional[QuestionSetDetailResponse]:
@@ -136,8 +117,8 @@ class QuestionSetService:
             total_weight = question_set.get_total_weight()
             errors.append(f"題目權重總和異常: {total_weight} (應該接近 100)")
 
-        # 驗證題目數量
-        if len(question_set.questions) != question_set.metadata.total_questions:
+        # 驗證題目數量（如果有提供的話）
+        if question_set.metadata.total_questions and len(question_set.questions) != question_set.metadata.total_questions:
             warnings.append(
                 f"題目數量不一致: 實際 {len(question_set.questions)}, "
                 f"metadata 記錄 {question_set.metadata.total_questions}"

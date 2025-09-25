@@ -39,8 +39,6 @@ def get_question_set_service(
 @router.get("", response_model=QuestionSetListResponse)
 async def list_question_sets(
     exam_type: Optional[str] = Query(None, description="認證類型篩選 (CKA/CKAD/CKS)"),
-    difficulty: Optional[str] = Query(None, description="難度篩選 (easy/medium/hard)"),
-    tags: Optional[str] = Query(None, description="標籤篩選，多個標籤用逗號分隔"),
     service: QuestionSetService = Depends(get_question_set_service)
 ):
     """
@@ -48,15 +46,8 @@ async def list_question_sets(
     取得所有題組列表，支援篩選
     """
     try:
-        # 解析標籤參數
-        tag_list = None
-        if tags:
-            tag_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
-
         response = await service.list_question_sets(
-            exam_type=exam_type,
-            difficulty=difficulty,
-            tags=tag_list
+            exam_type=exam_type
         )
         return response
 

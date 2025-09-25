@@ -7,30 +7,22 @@ from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 
 
+class VerificationStep(BaseModel):
+    """驗證步驟模型"""
+    id: str
+    description: str
+    verificationScriptFile: str  # 驗證腳本檔案名稱
+    expectedOutput: str  # 期望輸出
+    weightage: int  # 權重分數
+
+
 class QuestionData(BaseModel):
     """題目資料模型"""
-    id: int
-    content: str  # Markdown 格式的題目內容
-    weight: float  # 題目權重
-    kubernetes_objects: List[str]  # 涉及的 K8s 物件
-    hints: List[str] = []
-    verification_scripts: List[str] = []  # 腳本檔案路徑
-    preparation_scripts: List[str] = []  # 準備腳本路徑
-
-
-class TopicInfo(BaseModel):
-    """主題資訊"""
-    name: str
-    weight: float
-    questions: int
-    description: str
-
-
-class DomainInfo(BaseModel):
-    """考試領域資訊"""
-    name: str
-    weight: float
-    description: str
+    id: str  # 題目ID（字串格式）
+    context: str  # 背景/情境描述
+    tasks: str  # 任務描述
+    notes: str  # 注意事項
+    verification: List[VerificationStep]  # 驗證步驟列表
 
 
 class QuestionSetMetadata(BaseModel):
@@ -39,15 +31,14 @@ class QuestionSetMetadata(BaseModel):
     set_id: str
     name: str
     description: str
-    difficulty: str  # easy, medium, hard
     time_limit: int  # 分鐘
-    total_questions: int
     passing_score: int  # 及格分數百分比
-    created_date: str
-    version: str
+    # 可選欄位
+    difficulty: Optional[str] = None  # easy, medium, hard
+    total_questions: Optional[int] = None
+    created_date: Optional[str] = None
+    version: Optional[str] = None
     tags: List[str] = []
-    topics: List[TopicInfo] = []
-    exam_domains: List[DomainInfo] = []
 
 
 class QuestionSetData(BaseModel):
@@ -71,7 +62,7 @@ class QuestionSetData(BaseModel):
         """認證類型（向後相容）"""
         return self.exam_type
 
-    def get_question_by_id(self, question_id: int) -> Optional[QuestionData]:
+    def get_question_by_id(self, question_id: str) -> Optional[QuestionData]:
         """根據 ID 獲取題目"""
         for question in self.questions:
             if question.id == question_id:
@@ -85,14 +76,20 @@ class QuestionSetData(BaseModel):
         return None
 
     def get_total_weight(self) -> float:
-        """計算總權重"""
-        return sum(q.weight for q in self.questions)
+        """計算總權重（所有驗證步驟的權重總和）"""
+        total_weight = 0
+        for question in self.questions:
+            for verification in question.verification:
+                total_weight += verification.weightage
+        return float(total_weight)
 
     def validate_question_weights(self) -> bool:
         """驗證題目權重總和"""
         total_weight = self.get_total_weight()
-        # 允許權重總和在 95-105 之間（考慮浮點數精度）
-        return 95.0 <= total_weight <= 105.0
+        # 新的驗證步驟權重系統，允許總權重在合理範圍內（一般為題目數量的1.5-3倍）
+        expected_min = len(self.questions) * 1.5
+        expected_max = len(self.questions) * 3.5
+        return expected_min <= total_weight <= expected_max
 
 
 # API 回應模型
@@ -103,12 +100,9 @@ class QuestionSetSummary(BaseModel):
     exam_type: str
     name: str
     description: str
-    difficulty: str
     time_limit: int
-    total_questions: int
     passing_score: int
-    version: str
-    tags: List[str]
+    total_questions: int  # 從實際題目數量計算
 
 
 class QuestionSetListResponse(BaseModel):
@@ -116,8 +110,6 @@ class QuestionSetListResponse(BaseModel):
     question_sets: List[QuestionSetSummary]
     total_count: int
     filtered_count: int
-    exam_types: List[str]
-    difficulties: List[str]
 
 
 class QuestionSetDetailResponse(BaseModel):

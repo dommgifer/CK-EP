@@ -208,18 +208,13 @@ class QuestionSetFileManager:
         """獲取所有題組"""
         return self._question_sets.copy()
 
-    def list_question_sets(self, certification_type: Optional[str] = None,
-                          difficulty: Optional[str] = None) -> List[QuestionSetData]:
+    def list_question_sets(self, certification_type: Optional[str] = None) -> List[QuestionSetData]:
         """列出題組（支援篩選）"""
         question_sets = list(self._question_sets.values())
 
         if certification_type:
             question_sets = [qs for qs in question_sets
                            if qs.certification_type.lower() == certification_type.lower()]
-
-        if difficulty:
-            question_sets = [qs for qs in question_sets
-                           if qs.metadata.difficulty.lower() == difficulty.lower()]
 
         return question_sets
 
