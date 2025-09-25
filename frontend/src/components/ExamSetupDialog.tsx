@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -15,8 +15,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { X, Plus, Trash2 } from "lucide-react";
+import { X, Plus, Trash2, Loader2 } from "lucide-react";
 import { AddVMDialog } from './AddVMDialog';
+import { questionSetApi, type QuestionSetSummary } from '@/services/questionSetApi';
 
 interface ExamSetupDialogProps {
   open: boolean;
@@ -30,8 +31,49 @@ export const ExamSetupDialog: React.FC<ExamSetupDialogProps> = ({
   onStartDeployment
 }) => {
   const [examType, setExamType] = useState("CKS");
-  const [examSet, setExamSet] = useState("CKS-001");
+  const [examSet, setExamSet] = useState("");
   const [showAddVMDialog, setShowAddVMDialog] = useState(false);
+  const [questionSets, setQuestionSets] = useState<QuestionSetSummary[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // 載入題組數據
+  const loadQuestionSets = async (examType: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await questionSetApi.getAll({ exam_type: examType });
+      setQuestionSets(response.question_sets);
+
+      // 如果有題組，預設選中第一個
+      if (response.question_sets.length > 0) {
+        const setId = `${response.question_sets[0].exam_type.toLowerCase()}-${response.question_sets[0].set_id}`;
+        setExamSet(setId);
+      } else {
+        // 如果沒有題組，確保清空選擇
+        setExamSet("");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '載入題組失敗');
+      setQuestionSets([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 監聽考試類型變化，重新載入題組
+  useEffect(() => {
+    if (open && examType) {
+      loadQuestionSets(examType);
+    }
+  }, [examType, open]);
+
+  // 監聽 examType 變化，重設 examSet
+  const handleExamTypeChange = (newExamType: string) => {
+    setExamType(newExamType);
+    setExamSet(""); // 重設題組選擇
+    setQuestionSets([]); // 立即清空題組列表
+  };
 
   const handleStartDeployment = () => {
     onStartDeployment();
@@ -51,28 +93,15 @@ export const ExamSetupDialog: React.FC<ExamSetupDialogProps> = ({
 
   const [vmConfig, setVmConfig] = useState("lab");
 
-  const examSets = [
-    { 
-      value: "CKS-001", 
-      label: "CKS 模擬測驗 001 - 基礎安全強化",
-      description: "涵蓋完整的 CKS 考試主題，包含 Pod Security、Network Policies、RBAC、系統強化、運行時安全等",
-      questions: 15,
-      time: 120
-    },
-    { 
-      value: "CKS-002", 
-      label: "CKS 模擬測驗 002 - 進階安全管理",
-      description: "進階安全場景，包含複雜的網絡策略配置、映像安全掃描、運行時威脅檢測等實務操作",
-      questions: 24,
-      time: 120
-    }
-  ];
-
   const vmOptions = [
     { value: "lab", label: "lab (192.168.1.60:22)" }
   ];
 
-  const currentExamSet = examSets.find(set => set.value === examSet) || examSets[0];
+  // 根據選中的題組 ID 找到對應的題組資料
+  const currentExamSet = questionSets.find(set => {
+    const setId = `${set.exam_type.toLowerCase()}-${set.set_id}`;
+    return setId === examSet;
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -99,7 +128,7 @@ export const ExamSetupDialog: React.FC<ExamSetupDialogProps> = ({
             <label className="text-sm font-medium text-foreground">
               考試類型
             </label>
-            <Select value={examType} onValueChange={setExamType}>
+            <Select value={examType} onValueChange={handleExamTypeChange}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="選擇考試類型" />
               </SelectTrigger>
@@ -118,32 +147,54 @@ export const ExamSetupDialog: React.FC<ExamSetupDialogProps> = ({
             <label className="text-sm font-medium text-foreground">
               題組選擇
             </label>
-            <Select value={examSet} onValueChange={setExamSet}>
+            <Select value={examSet} onValueChange={setExamSet} disabled={loading}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="選擇題組" />
+                <SelectValue placeholder={loading ? "載入中..." : "選擇題組"} />
+                {loading && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
               </SelectTrigger>
               <SelectContent>
-                {examSets.map(set => (
-                  <SelectItem key={set.value} value={set.value}>
-                    {set.label}
-                  </SelectItem>
-                ))}
+                {questionSets.map(set => {
+                  const setId = `${set.exam_type.toLowerCase()}-${set.set_id}`;
+                  return (
+                    <SelectItem key={setId} value={setId}>
+                      {set.name}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
+            {error && (
+              <p className="text-sm text-red-500">
+                {error}
+              </p>
+            )}
           </div>
 
           {/* 考試描述 */}
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
-              描述：{currentExamSet.description}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              題目數量：{currentExamSet.questions}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              考試時間：{currentExamSet.time} 分鐘
-            </p>
-          </div>
+          {currentExamSet && (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                描述：{currentExamSet.description}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                題目數量：{currentExamSet.total_questions}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                考試時間：{currentExamSet.time_limit} 分鐘
+              </p>
+              <p className="text-sm text-muted-foreground">
+                及格分數：{currentExamSet.passing_score}%
+              </p>
+            </div>
+          )}
+
+          {!currentExamSet && examSet && (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                請選擇題組以查看詳細資訊
+              </p>
+            </div>
+          )}
 
           {/* VM 配置 */}
           <div className="space-y-4">

@@ -6,51 +6,57 @@
 const API_BASE_URL = '/api/v1'
 
 interface QuestionSetFilters {
-  certification_type?: string
-  difficulty?: string
+  exam_type?: string
 }
 
-interface QuestionSet {
+interface QuestionSetSummary {
   set_id: string
-  certification_type: string
+  exam_type: string
+  name: string
+  description: string
+  time_limit: number
+  passing_score: number
+  total_questions: number
+}
+
+interface QuestionSetListResponse {
+  question_sets: QuestionSetSummary[]
+  total_count: number
+  filtered_count: number
+}
+
+interface VerificationStep {
+  id: string
+  description: string
+  verificationScriptFile: string
+  expectedOutput: string
+  weightage: number
+}
+
+interface Question {
+  id: string
+  context: string
+  tasks: string
+  notes: string
+  verification: VerificationStep[]
+}
+
+interface QuestionSetDetail {
+  set_id: string
+  exam_type: string
   metadata: {
     exam_type: string
     set_id: string
     name: string
     description: string
-    difficulty: string
     time_limit: number
-    total_questions: number
     passing_score: number
-    created_date: string
-    version: string
-    tags: string[]
-    topics: Array<{
-      name: string
-      weight: number
-    }>
-    exam_domains: Array<{
-      name: string
-      percentage: number
-    }>
   }
-  questions: Array<{
-    id: number
-    content: string
-    weight: number
-    kubernetes_objects: string[]
-    hints: string[]
-    verification_scripts: string[]
-    preparation_scripts: string[]
-  }>
+  questions: Question[]
   scripts_path: string
-  file_paths: {
-    metadata: string
-    questions: string
-    scripts: string
-  }
-  loaded_at: string
-  file_modified_at: string
+  total_weight: number
+  loaded_at: string | null
+  file_modified_at: string | null
 }
 
 interface ReloadResult {
@@ -81,25 +87,21 @@ class QuestionSetAPI {
     return response.json()
   }
 
-  async getAll(filters: QuestionSetFilters = {}): Promise<QuestionSet[]> {
+  async getAll(filters: QuestionSetFilters = {}): Promise<QuestionSetListResponse> {
     const params = new URLSearchParams()
 
-    if (filters.certification_type) {
-      params.append('certification_type', filters.certification_type)
-    }
-
-    if (filters.difficulty) {
-      params.append('difficulty', filters.difficulty)
+    if (filters.exam_type) {
+      params.append('exam_type', filters.exam_type)
     }
 
     const query = params.toString()
     const endpoint = query ? `/question-sets?${query}` : '/question-sets'
 
-    return this.request<QuestionSet[]>(endpoint)
+    return this.request<QuestionSetListResponse>(endpoint)
   }
 
-  async getById(setId: string): Promise<QuestionSet> {
-    return this.request<QuestionSet>(`/question-sets/${setId}`)
+  async getById(setId: string): Promise<QuestionSetDetail> {
+    return this.request<QuestionSetDetail>(`/question-sets/${setId}`)
   }
 
   async reload(): Promise<ReloadResult> {
@@ -110,4 +112,12 @@ class QuestionSetAPI {
 }
 
 export const questionSetApi = new QuestionSetAPI()
-export type { QuestionSet, QuestionSetFilters, ReloadResult }
+export type {
+  QuestionSetSummary,
+  QuestionSetListResponse,
+  QuestionSetDetail,
+  QuestionSetFilters,
+  Question,
+  VerificationStep,
+  ReloadResult
+}
