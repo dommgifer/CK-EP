@@ -137,7 +137,7 @@ class VMConfigFileService:
     def _validate_ssh_config(self, ssh_config: Dict[str, Any]) -> List[str]:
         """驗證 SSH 配置"""
         errors = []
-        required_ssh_fields = ["username"]
+        required_ssh_fields = ["user"]
 
         for field in required_ssh_fields:
             if field not in ssh_config:

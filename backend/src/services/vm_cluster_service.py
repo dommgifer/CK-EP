@@ -10,6 +10,8 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+import redis
+from contextlib import asynccontextmanager
 
 from ..models.vm_cluster_config import (
     VMClusterConfig,
@@ -24,20 +26,37 @@ from ..models.vm_cluster_config import (
 class VMClusterService:
     """VM 叢集配置服務"""
 
-    def __init__(self, db: Session):
+    VM_CONFIG_CACHE_KEY = "vm_cluster_config"
+    CACHE_TIMEOUT = 3600  # 1小時
+
+    def __init__(self, db: Session, redis_client: Optional[redis.Redis] = None):
         self.db = db
+        try:
+            self.redis = redis_client or redis.Redis(host='redis', port=6379, db=0, decode_responses=True)
+            # 測試連線
+            self.redis.ping()
+            self.cache_enabled = True
+        except Exception:
+            self.redis = None
+            self.cache_enabled = False
 
     async def create_vm_config(self, config_request: CreateVMConfigRequest) -> VMClusterConfigResponse:
-        """建立 VM 配置"""
+        """建立 VM 配置（覆蓋更新模式）"""
         try:
+            # 檢查是否已有配置，如有則刪除既有的
+            existing_configs = await self.list_vm_configs()
+            if existing_configs:
+                # 覆蓋更新：刪除所有現有配置
+                for config in existing_configs:
+                    await self.delete_vm_config(config.id)
+
             # 生成 ID（如果未提供）
             config_id = config_request.id or str(uuid.uuid4())
 
             # 建立配置 JSON
             config_data = {
                 "nodes": [node.dict() for node in config_request.nodes],
-                "ssh_config": config_request.ssh_config.dict(),
-                "network": config_request.network.dict()
+                "ssh_config": config_request.ssh_config.dict()
             }
 
             # 建立資料庫記錄
@@ -53,11 +72,11 @@ class VMClusterService:
             self.db.commit()
             self.db.refresh(db_config)
 
+            # 更新快取
+            await self._update_cache(db_config)
+
             return self._to_response_model(db_config)
 
-        except IntegrityError:
-            self.db.rollback()
-            raise ValueError(f"VM 配置 ID '{config_id}' 已存在")
         except Exception as e:
             self.db.rollback()
             raise RuntimeError(f"建立 VM 配置失敗: {str(e)}")
@@ -76,11 +95,35 @@ class VMClusterService:
 
     async def list_vm_configs(self) -> List[VMClusterConfigResponse]:
         """列出所有 VM 配置"""
+        # 嘗試從快取讀取
+        if self.cache_enabled:
+            try:
+                cached_data = self.redis.get(f"{self.VM_CONFIG_CACHE_KEY}:list")
+                if cached_data:
+                    configs_data = json.loads(cached_data)
+                    return [VMClusterConfigResponse(**config) for config in configs_data]
+            except Exception:
+                pass  # 快取失敗，繼續從資料庫讀取
+
         db_configs = self.db.query(VMClusterConfig).filter(
             VMClusterConfig.is_active == "true"
         ).all()
 
-        return [self._to_response_model(config) for config in db_configs]
+        responses = [self._to_response_model(config) for config in db_configs]
+
+        # 更新列表快取
+        if self.cache_enabled and responses:
+            try:
+                cache_data = [config.dict() for config in responses]
+                self.redis.setex(
+                    f"{self.VM_CONFIG_CACHE_KEY}:list",
+                    self.CACHE_TIMEOUT,
+                    json.dumps(cache_data, default=str)
+                )
+            except Exception:
+                pass  # 快取更新失敗不影響主流程
+
+        return responses
 
     async def update_vm_config(self, config_id: str, update_request: UpdateVMConfigRequest) -> Optional[VMClusterConfigResponse]:
         """更新 VM 配置"""
@@ -100,15 +143,13 @@ class VMClusterService:
                 db_config.description = update_request.description
 
             # 更新配置 JSON
-            if any([update_request.nodes, update_request.ssh_config, update_request.network]):
+            if any([update_request.nodes, update_request.ssh_config]):
                 current_config = json.loads(db_config.config_json)
 
                 if update_request.nodes is not None:
                     current_config["nodes"] = [node.dict() for node in update_request.nodes]
                 if update_request.ssh_config is not None:
                     current_config["ssh_config"] = update_request.ssh_config.dict()
-                if update_request.network is not None:
-                    current_config["network"] = update_request.network.dict()
 
                 db_config.config_json = json.dumps(current_config)
 
@@ -116,6 +157,9 @@ class VMClusterService:
 
             self.db.commit()
             self.db.refresh(db_config)
+
+            # 更新快取
+            await self._update_cache(db_config)
 
             return self._to_response_model(db_config)
 
@@ -134,10 +178,13 @@ class VMClusterService:
             return False
 
         try:
-            db_config.is_active = "false"
-            db_config.updated_at = datetime.utcnow()
-
+            # 硬刪除而不是軟刪除（用於覆蓋更新）
+            self.db.delete(db_config)
             self.db.commit()
+
+            # 清除快取
+            await self._clear_cache()
+
             return True
 
         except Exception as e:
@@ -271,6 +318,37 @@ class VMClusterService:
                 "response_time": round(response_time, 3)
             }
 
+    async def _update_cache(self, db_config: VMClusterConfig):
+        """更新快取"""
+        if not self.cache_enabled:
+            return
+
+        try:
+            response = self._to_response_model(db_config)
+            # 更新單一配置快取
+            self.redis.setex(
+                f"{self.VM_CONFIG_CACHE_KEY}:{db_config.id}",
+                self.CACHE_TIMEOUT,
+                json.dumps(response.dict(), default=str)
+            )
+            # 清除列表快取讓它重新載入
+            self.redis.delete(f"{self.VM_CONFIG_CACHE_KEY}:list")
+        except Exception:
+            pass
+
+    async def _clear_cache(self):
+        """清除所有快取"""
+        if not self.cache_enabled:
+            return
+
+        try:
+            # 清除所有 VM 配置相關快取
+            keys = self.redis.keys(f"{self.VM_CONFIG_CACHE_KEY}:*")
+            if keys:
+                self.redis.delete(*keys)
+        except Exception:
+            pass
+
     def _to_response_model(self, db_config: VMClusterConfig) -> VMClusterConfigResponse:
         """轉換資料庫模型為回應模型"""
         config_data = json.loads(db_config.config_json)
@@ -281,7 +359,6 @@ class VMClusterService:
             description=db_config.description,
             nodes=config_data["nodes"],
             ssh_config=config_data["ssh_config"],
-            network=config_data["network"],
             created_at=db_config.created_at,
             updated_at=db_config.updated_at,
             is_active=db_config.is_active == "true",

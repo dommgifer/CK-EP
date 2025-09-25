@@ -25,7 +25,6 @@ class TestVMConfigsContract:
                 assert "description" in vm_config
                 assert "nodes" in vm_config
                 assert "ssh_config" in vm_config
-                assert "network" in vm_config
 
     def test_post_vm_configs_contract(self, test_client: TestClient, mock_vm_config):
         """測試 POST /api/v1/vm-configs 契約"""

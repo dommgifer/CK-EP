@@ -5,11 +5,9 @@ VM 叢集配置資料模型
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from sqlalchemy import Column, String, DateTime, Text, Integer
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
-from pydantic import BaseModel, Field
-
-Base = declarative_base()
+from pydantic import BaseModel, Field, field_validator, model_validator
+from ..database.connection import Base
 
 
 class VMClusterConfig(Base):
@@ -38,40 +36,47 @@ class VMClusterConfig(Base):
 
 # Pydantic 模型
 
-class VMNodeSpecs(BaseModel):
-    """VM 節點規格"""
-    cpu_cores: int = Field(..., ge=1, description="CPU 核心數")
-    memory_gb: int = Field(..., ge=1, description="記憶體 GB")
-    disk_gb: int = Field(..., ge=10, description="磁碟空間 GB")
-
-
 class VMNode(BaseModel):
     """VM 節點配置"""
     name: str = Field(..., description="節點名稱")
     ip: str = Field(..., description="IP 位址")
     role: str = Field(..., description="節點角色 (master/worker)")
-    specs: VMNodeSpecs = Field(..., description="硬體規格")
+
+    @field_validator('role')
+    @classmethod
+    def validate_role(cls, v):
+        if v not in ['master', 'worker']:
+            raise ValueError('角色必須是 master 或 worker')
+        return v
 
 
 class SSHConfig(BaseModel):
     """SSH 連線配置"""
     user: str = Field(..., description="SSH 使用者名稱")
     port: int = Field(22, description="SSH 埠號")
-
-
-class NetworkConfig(BaseModel):
-    """網路配置"""
-    pod_subnet: str = Field(..., description="Pod 子網路")
-    service_subnet: str = Field(..., description="Service 子網路")
+    private_key_path: str = Field(default="/root/.ssh/id_rsa", description="SSH 私鑰路徑")
 
 
 class VMClusterConfigBase(BaseModel):
     """VM 叢集配置基礎模型"""
     name: str = Field(..., description="叢集名稱")
     description: Optional[str] = Field(None, description="叢集描述")
-    nodes: List[VMNode] = Field(..., min_items=1, description="節點列表")
+    nodes: List[VMNode] = Field(..., min_items=2, max_items=2, description="節點列表(固定2個:1 master + 1 worker)")
     ssh_config: SSHConfig = Field(..., description="SSH 配置")
-    network: NetworkConfig = Field(..., description="網路配置")
+
+    @model_validator(mode='after')
+    def validate_nodes(self):
+        """驗證必須有1個master和1個worker節點"""
+        roles = [node.role for node in self.nodes]
+        master_count = roles.count('master')
+        worker_count = roles.count('worker')
+
+        if master_count != 1:
+            raise ValueError(f'必須恰好有1個master節點，當前有{master_count}個')
+        if worker_count != 1:
+            raise ValueError(f'必須恰好有1個worker節點，當前有{worker_count}個')
+
+        return self
 
 
 class CreateVMConfigRequest(VMClusterConfigBase):
@@ -83,9 +88,23 @@ class UpdateVMConfigRequest(BaseModel):
     """更新 VM 配置請求模型"""
     name: Optional[str] = None
     description: Optional[str] = None
-    nodes: Optional[List[VMNode]] = None
+    nodes: Optional[List[VMNode]] = Field(None, min_items=2, max_items=2, description="節點列表(固定2個:1 master + 1 worker)")
     ssh_config: Optional[SSHConfig] = None
-    network: Optional[NetworkConfig] = None
+
+    @model_validator(mode='after')
+    def validate_nodes(self):
+        """驗證必須有1個master和1個worker節點"""
+        if self.nodes is not None:
+            roles = [node.role for node in self.nodes]
+            master_count = roles.count('master')
+            worker_count = roles.count('worker')
+
+            if master_count != 1:
+                raise ValueError(f'必須恰好有1個master節點，當前有{master_count}個')
+            if worker_count != 1:
+                raise ValueError(f'必須恰好有1個worker節點，當前有{worker_count}個')
+
+        return self
 
 
 class VMClusterConfigResponse(VMClusterConfigBase):
@@ -136,7 +155,6 @@ class VMClusterConfigDetailed(VMClusterConfigResponse):
             description=db_model.description,
             nodes=config_data["nodes"],
             ssh_config=config_data["ssh_config"],
-            network=config_data["network"],
             created_at=db_model.created_at,
             updated_at=db_model.updated_at,
             is_active=db_model.is_active == "true",

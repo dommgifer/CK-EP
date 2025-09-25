@@ -49,21 +49,18 @@ def mock_vm_config():
             {
                 "name": "k8s-master",
                 "ip": "192.168.1.10",
-                "role": "master",
-                "specs": {
-                    "cpu_cores": 2,
-                    "memory_gb": 4,
-                    "disk_gb": 50
-                }
+                "role": "master"
+            },
+            {
+                "name": "k8s-worker",
+                "ip": "192.168.1.11",
+                "role": "worker"
             }
         ],
         "ssh_config": {
             "user": "ubuntu",
-            "port": 22
-        },
-        "network": {
-            "pod_subnet": "10.244.0.0/16",
-            "service_subnet": "10.96.0.0/12"
+            "port": 22,
+            "private_key_path": "/root/.ssh/id_rsa"
         }
     }
 
