@@ -112,3 +112,4 @@ docs/*
 .specify
 question-set-examples/*
 frontend-design-*/*
+data/*
