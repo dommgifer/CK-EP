@@ -1,0 +1,10 @@
+cilium_extra_values:  
+  authentication:  
+    mutual:  
+      spire:  
+        enabled: true 
+        install:
+          enabled: true
+
+cilium_config_extra_vars:  
+  spire-enabled: "true"  

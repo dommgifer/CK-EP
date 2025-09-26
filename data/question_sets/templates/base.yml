@@ -1,0 +1,70 @@
+# 基礎安全配置模板 - 基於官方 Kubespray 標準
+# 適用於所有考試類型的安全預設配置
+# 參考: kubespray/inventory/sample/group_vars/k8s_cluster/k8s-cluster.yml
+
+# Kubernetes 版本
+kube_version: "1.30.5"
+
+# 容器運行時
+container_manager: containerd
+
+# 網路插件配置
+kube_network_plugin: calico
+kube_network_plugin_multus: false
+
+# 網路配置
+kube_service_addresses: 10.233.0.0/18
+kube_pods_subnet: 10.233.64.0/18
+kube_network_node_prefix: 24
+
+# 集群基本配置
+cluster_name: cluster.local
+kube_proxy_mode: ipvs
+kube_proxy_strict_arp: false
+
+# DNS 配置
+dns_mode: coredns
+ndots: 2
+enable_nodelocaldns: false
+
+# API Server 安全配置 (使用正確的變數名稱)
+kube_api_anonymous_auth: false
+remove_anonymous_access: false
+
+# 證書和加密配置
+cert_management: script
+kube_encrypt_secret_data: false
+
+# 審計配置 (預設關閉，CKS 考試時可啟用)
+kubernetes_audit: false
+
+# 資源預留配置
+# kube_reserved: false (預設關閉，讓 overwrite 可以啟用)
+# kube_memory_reserved: 256Mi
+# kube_cpu_reserved: 100m
+# kube_ephemeral_storage_reserved: 2Gi
+
+# Container image 拉取策略
+k8s_image_pull_policy: IfNotPresent
+
+# 事件保留時間
+event_ttl_duration: "1h0m0s"
+
+# 自動續約證書
+auto_renew_certificates: false
+
+# Kubelet 配置目錄
+default_kubelet_config_dir: "{{ kube_config_dir }}/dynamic_kubelet_dir"
+
+# 存儲配置
+persistent_volumes_enabled: false
+volume_cross_zone_attachment: false
+
+# kubeadm 配置
+kubeadm_certificate_key: "{{ lookup('password', credentials_dir + '/kubeadm_certificate_key.creds length=64 chars=hexdigits') | lower }}"
+kubeadm_init_timeout: 300s
+
+# 清理配置
+deploy_netchecker: false
+
+kube_owner: root
