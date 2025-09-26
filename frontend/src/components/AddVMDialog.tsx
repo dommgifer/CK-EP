@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { X, Loader2 } from "lucide-react";
+import { X, Loader2, Info } from "lucide-react";
 
 interface VMConfigData {
   name: string;
@@ -175,7 +175,13 @@ export const AddVMDialog: React.FC<AddVMDialogProps> = ({
 
           {/* Worker 節點配置 */}
           <div className="space-y-4 p-4 bg-muted/20 rounded-lg border">
-            <h3 className="text-sm font-medium text-foreground">💼 Worker 節點</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-medium text-foreground">💼 Worker 節點</h3>
+              <Info
+                className="h-4 w-4 text-muted-foreground cursor-help"
+                title="系統限定為 1 個 Master + 1 個 Worker 節點架構"
+              />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="workerName" className="text-xs font-medium text-foreground">
@@ -202,9 +208,6 @@ export const AddVMDialog: React.FC<AddVMDialogProps> = ({
                   required
                 />
               </div>
-            </div>
-            <div className="text-xs text-muted-foreground bg-blue-50 p-2 rounded">
-              📝 系統限定為 1 個 Master + 1 個 Worker 節點架構
             </div>
           </div>
 
@@ -237,9 +240,15 @@ export const AddVMDialog: React.FC<AddVMDialogProps> = ({
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="sshKeyPath" className="text-xs font-medium text-foreground">
-                SSH 私鑰路徑
-              </Label>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="sshKeyPath" className="text-xs font-medium text-foreground">
+                  SSH 私鑰路徑
+                </Label>
+                <Info
+                  className="h-3 w-3 text-muted-foreground cursor-help"
+                  title="私鑰路徑固定為 container 內部路徑，請將私鑰放置於 host 的 data/ssh_keys/id_rsa"
+                />
+              </div>
               <Input
                 id="sshKeyPath"
                 value={sshKeyPath}
@@ -247,9 +256,6 @@ export const AddVMDialog: React.FC<AddVMDialogProps> = ({
                 className="w-full"
                 readOnly
               />
-              <p className="text-xs text-muted-foreground bg-yellow-50 p-2 rounded">
-                📝 私鑰路徑固定為 container 內部路徑，請將私鑰放置於 host 的 data/ssh_keys/id_rsa
-              </p>
             </div>
           </div>
 

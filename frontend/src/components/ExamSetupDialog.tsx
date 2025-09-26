@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { X, Plus, Trash2, Loader2 } from "lucide-react";
+import { X, Plus, Trash2, Loader2, Check, AlertCircle } from "lucide-react";
 import { AddVMDialog } from './AddVMDialog';
 import { questionSetApi, type QuestionSetSummary } from '@/services/questionSetApi';
 import { vmConfigApi, type VMConfig } from '@/services/vmConfigApi';
@@ -40,6 +40,12 @@ export const ExamSetupDialog: React.FC<ExamSetupDialogProps> = ({
   const [vmConfigs, setVmConfigs] = useState<VMConfig[]>([]);
   const [vmLoading, setVmLoading] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<{
+    status: 'idle' | 'success' | 'error';
+    message?: string;
+    successNodes?: number;
+    totalNodes?: number;
+  }>({ status: 'idle' });
 
   // 載入題組數據
   const loadQuestionSets = async (examType: string) => {
@@ -126,15 +132,28 @@ export const ExamSetupDialog: React.FC<ExamSetupDialogProps> = ({
     if (!vmConfig) return;
 
     setTestingConnection(true);
+    setConnectionStatus({ status: 'idle' });
+
     try {
       const result = await vmConfigApi.testConnection(vmConfig);
       if (result.success) {
-        alert(`連線測試成功！\n成功節點：${result.successful_nodes}/${result.total_nodes}`);
+        setConnectionStatus({
+          status: 'success',
+          message: '連線成功',
+          successNodes: result.successful_nodes,
+          totalNodes: result.total_nodes
+        });
       } else {
-        alert(`連線測試失敗：${result.message}`);
+        setConnectionStatus({
+          status: 'error',
+          message: result.message || '連線失敗'
+        });
       }
     } catch (error) {
-      alert(`連線測試失敗：${error instanceof Error ? error.message : '未知錯誤'}`);
+      setConnectionStatus({
+        status: 'error',
+        message: error instanceof Error ? error.message : '未知錯誤'
+      });
     } finally {
       setTestingConnection(false);
     }
@@ -293,7 +312,14 @@ export const ExamSetupDialog: React.FC<ExamSetupDialogProps> = ({
               </Button>
             </div>
             
-            <Select value={vmConfig} onValueChange={setVmConfig} disabled={vmLoading}>
+            <Select
+              value={vmConfig}
+              onValueChange={(value) => {
+                setVmConfig(value);
+                setConnectionStatus({ status: 'idle' });
+              }}
+              disabled={vmLoading}
+            >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder={vmLoading ? "載入中..." : "選擇 VM"} />
                 {vmLoading && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
@@ -316,10 +342,9 @@ export const ExamSetupDialog: React.FC<ExamSetupDialogProps> = ({
                     <div className="text-sm font-medium text-foreground">
                       {currentVMConfig.name}
                     </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      Master: {currentVMConfig.nodes.find(n => n.role === 'master')?.ip} |
-                      Worker: {currentVMConfig.nodes.find(n => n.role === 'worker')?.ip} |
-                      SSH: {currentVMConfig.ssh_config.user}@{currentVMConfig.ssh_config.port}
+                    <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                      <div>Master: {currentVMConfig.nodes.find(n => n.role === 'master')?.ip}</div>
+                      <div>Worker: {currentVMConfig.nodes.find(n => n.role === 'worker')?.ip}</div>
                     </div>
                     {currentVMConfig.description && (
                       <div className="text-xs text-muted-foreground mt-1">
@@ -327,7 +352,27 @@ export const ExamSetupDialog: React.FC<ExamSetupDialogProps> = ({
                       </div>
                     )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-3">
+                    {/* 連線狀態指示器 */}
+                    {connectionStatus.status === 'success' && (
+                      <div className="flex items-center gap-1.5 text-green-600">
+                        <Check className="h-4 w-4" />
+                        <span className="text-sm font-medium">連線成功</span>
+                        {connectionStatus.successNodes && connectionStatus.totalNodes && (
+                          <span className="text-xs text-muted-foreground">
+                            ({connectionStatus.successNodes}/{connectionStatus.totalNodes})
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {connectionStatus.status === 'error' && (
+                      <div className="flex items-center gap-1.5 text-red-600">
+                        <AlertCircle className="h-4 w-4" />
+                        <span className="text-sm font-medium">連線失敗</span>
+                      </div>
+                    )}
+
                     <Button
                       variant="outline"
                       size="sm"
