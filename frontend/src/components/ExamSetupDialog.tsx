@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { X, Plus, Trash2, Loader2 } from "lucide-react";
 import { AddVMDialog } from './AddVMDialog';
 import { questionSetApi, type QuestionSetSummary } from '@/services/questionSetApi';
+import { vmConfigApi, type VMConfig } from '@/services/vmConfigApi';
 
 interface ExamSetupDialogProps {
   open: boolean;
@@ -36,6 +37,9 @@ export const ExamSetupDialog: React.FC<ExamSetupDialogProps> = ({
   const [questionSets, setQuestionSets] = useState<QuestionSetSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [vmConfigs, setVmConfigs] = useState<VMConfig[]>([]);
+  const [vmLoading, setVmLoading] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
 
   // 載入題組數據
   const loadQuestionSets = async (examType: string) => {
@@ -68,6 +72,13 @@ export const ExamSetupDialog: React.FC<ExamSetupDialogProps> = ({
     }
   }, [examType, open]);
 
+  // 監聽對話框開啟，載入 VM 配置
+  useEffect(() => {
+    if (open) {
+      loadVMConfigs();
+    }
+  }, [open]);
+
   // 監聽 examType 變化，重設 examSet
   const handleExamTypeChange = (newExamType: string) => {
     setExamType(newExamType);
@@ -80,9 +91,68 @@ export const ExamSetupDialog: React.FC<ExamSetupDialogProps> = ({
     onOpenChange(false);
   };
 
-  const handleAddVM = (vmConfig: any) => {
-    console.log('New VM config:', vmConfig);
-    // TODO: Add VM to list
+  const handleAddVM = async (vmConfigData: any) => {
+    try {
+      await vmConfigApi.create(vmConfigData);
+      await loadVMConfigs(); // 重新載入 VM 配置列表
+      console.log('VM config created successfully');
+    } catch (error) {
+      console.error('Failed to create VM config:', error);
+    }
+  };
+
+  // 載入 VM 配置列表
+  const loadVMConfigs = async () => {
+    setVmLoading(true);
+    try {
+      const configs = await vmConfigApi.getAll();
+      setVmConfigs(configs);
+      // 如果有配置，選中第一個
+      if (configs.length > 0) {
+        setVmConfig(configs[0].id);
+      } else {
+        setVmConfig('');
+      }
+    } catch (error) {
+      console.error('Failed to load VM configs:', error);
+      setVmConfigs([]);
+    } finally {
+      setVmLoading(false);
+    }
+  };
+
+  // 測試 VM 連線
+  const handleTestConnection = async () => {
+    if (!vmConfig) return;
+
+    setTestingConnection(true);
+    try {
+      const result = await vmConfigApi.testConnection(vmConfig);
+      if (result.success) {
+        alert(`連線測試成功！\n成功節點：${result.successful_nodes}/${result.total_nodes}`);
+      } else {
+        alert(`連線測試失敗：${result.message}`);
+      }
+    } catch (error) {
+      alert(`連線測試失敗：${error instanceof Error ? error.message : '未知錯誤'}`);
+    } finally {
+      setTestingConnection(false);
+    }
+  };
+
+  // 刪除 VM 配置
+  const handleDeleteVM = async () => {
+    if (!vmConfig) return;
+
+    if (confirm('確定要刪除此 VM 配置嗎？此操作無法復原。')) {
+      try {
+        await vmConfigApi.delete(vmConfig);
+        await loadVMConfigs(); // 重新載入列表
+        alert('VM 配置已刪除');
+      } catch (error) {
+        alert(`刪除失敗：${error instanceof Error ? error.message : '未知錯誤'}`);
+      }
+    }
   };
 
   const examTypes = [
@@ -91,11 +161,21 @@ export const ExamSetupDialog: React.FC<ExamSetupDialogProps> = ({
     { value: "CKAD", label: "CKAD - Certified Kubernetes Application Developer" }
   ];
 
-  const [vmConfig, setVmConfig] = useState("lab");
+  const [vmConfig, setVmConfig] = useState("");
 
-  const vmOptions = [
-    { value: "lab", label: "lab (192.168.1.60:22)" }
-  ];
+  // 動態生成 VM 選項
+  const vmOptions = vmConfigs.map(config => {
+    const masterNode = config.nodes.find(node => node.role === 'master');
+    const workerNode = config.nodes.find(node => node.role === 'worker');
+    const ips = [masterNode?.ip, workerNode?.ip].filter(Boolean).join(', ');
+    return {
+      value: config.id,
+      label: `${config.name} (${ips})`
+    };
+  });
+
+  // 獲取當前選中的 VM 配置
+  const currentVMConfig = vmConfigs.find(config => config.id === vmConfig);
 
   // 根據選中的題組 ID 找到對應的題組資料
   const currentExamSet = questionSets.find(set => {
@@ -213,9 +293,10 @@ export const ExamSetupDialog: React.FC<ExamSetupDialogProps> = ({
               </Button>
             </div>
             
-            <Select value={vmConfig} onValueChange={setVmConfig}>
+            <Select value={vmConfig} onValueChange={setVmConfig} disabled={vmLoading}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="選擇 VM" />
+                <SelectValue placeholder={vmLoading ? "載入中..." : "選擇 VM"} />
+                {vmLoading && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
               </SelectTrigger>
               <SelectContent>
                 {vmOptions.map(vm => (
@@ -227,21 +308,62 @@ export const ExamSetupDialog: React.FC<ExamSetupDialogProps> = ({
             </Select>
 
             {/* 已配置的 VM */}
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-foreground">已配置的 VM：</p>
-              <div className="flex items-center justify-between p-3 bg-muted/30 rounded-md border">
-                <span className="text-sm text-foreground">lab - 192.168.1.60:22</span>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="text-sm">
-                    測試連線
-                  </Button>
-                  <Button variant="destructive" size="sm" className="text-sm">
-                    <Trash2 className="h-4 w-4 mr-1" />
-                    刪除
-                  </Button>
+            {currentVMConfig && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-foreground">已配置的 VM：</p>
+                <div className="flex items-center justify-between p-3 bg-muted/30 rounded-md border">
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-foreground">
+                      {currentVMConfig.name}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Master: {currentVMConfig.nodes.find(n => n.role === 'master')?.ip} |
+                      Worker: {currentVMConfig.nodes.find(n => n.role === 'worker')?.ip} |
+                      SSH: {currentVMConfig.ssh_config.user}@{currentVMConfig.ssh_config.port}
+                    </div>
+                    {currentVMConfig.description && (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {currentVMConfig.description}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-sm"
+                      onClick={handleTestConnection}
+                      disabled={testingConnection}
+                    >
+                      {testingConnection ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                          測試中
+                        </>
+                      ) : (
+                        '測試連線'
+                      )}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="text-sm"
+                      onClick={handleDeleteVM}
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      刪除
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+
+            {vmConfigs.length === 0 && !vmLoading && (
+              <div className="text-center py-4 text-muted-foreground">
+                <p className="text-sm">尚未配置任何 VM</p>
+                <p className="text-xs mt-1">點擊 "新增 VM" 開始配置</p>
+              </div>
+            )}
           </div>
         </div>
 

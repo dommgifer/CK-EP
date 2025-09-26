@@ -10,12 +10,27 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { X } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
+
+interface VMConfigData {
+  name: string;
+  description?: string;
+  nodes: {
+    name: string;
+    ip: string;
+    role: 'master' | 'worker';
+  }[];
+  ssh_config: {
+    user: string;
+    port: number;
+    private_key_path: string;
+  };
+}
 
 interface AddVMDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAddVM: (vmConfig: any) => void;
+  onAddVM: (vmConfig: VMConfigData) => void;
 }
 
 export const AddVMDialog: React.FC<AddVMDialogProps> = ({
@@ -24,35 +39,71 @@ export const AddVMDialog: React.FC<AddVMDialogProps> = ({
   onAddVM
 }) => {
   const [configName, setConfigName] = useState("");
+  const [masterName, setMasterName] = useState("k8s-master");
   const [masterIP, setMasterIP] = useState("");
-  const [workerIPs, setWorkerIPs] = useState("");
+  const [workerName, setWorkerName] = useState("k8s-worker");
+  const [workerIP, setWorkerIP] = useState("");
   const [sshUser, setSshUser] = useState("ubuntu");
   const [sshPort, setSshPort] = useState("22");
-  const [authMethod, setAuthMethod] = useState("ssh-key");
-  const [sshKeyPath, setSshKeyPath] = useState("/app/ssh-keys/exam-key");
+  const [sshKeyPath, setSshKeyPath] = useState("/root/.ssh/id_rsa");
   const [description, setDescription] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = () => {
-    const vmConfig = {
-      name: configName,
-      masterIP,
-      workerIPs: workerIPs.split('\n').filter(ip => ip.trim()),
-      sshUser,
-      sshPort,
-      authMethod,
-      sshKeyPath,
-      description
-    };
-    onAddVM(vmConfig);
-    onOpenChange(false);
-    // Reset form
+  const handleSubmit = async () => {
+    if (!configName || !masterIP || !workerIP) {
+      alert('請填寫所有必填欄位');
+      return;
+    }
+
+    if (masterIP === workerIP) {
+      alert('Master 和 Worker 節點的 IP 位址不能相同');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const vmConfig: VMConfigData = {
+        name: configName,
+        description: description || undefined,
+        nodes: [
+          {
+            name: masterName,
+            ip: masterIP,
+            role: 'master'
+          },
+          {
+            name: workerName,
+            ip: workerIP,
+            role: 'worker'
+          }
+        ],
+        ssh_config: {
+          user: sshUser,
+          port: parseInt(sshPort),
+          private_key_path: sshKeyPath
+        }
+      };
+
+      await onAddVM(vmConfig);
+      onOpenChange(false);
+      resetForm();
+    } catch (error) {
+      alert(`建立 VM 配置失敗：${error instanceof Error ? error.message : '未知錯誤'}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const resetForm = () => {
     setConfigName("");
+    setMasterName("k8s-master");
     setMasterIP("");
-    setWorkerIPs("");
+    setWorkerName("k8s-worker");
+    setWorkerIP("");
     setSshUser("ubuntu");
     setSshPort("22");
-    setAuthMethod("ssh-key");
-    setSshKeyPath("/app/ssh-keys/exam-key");
+    setSshKeyPath("/root/.ssh/id_rsa");
     setDescription("");
   };
 
@@ -90,92 +141,116 @@ export const AddVMDialog: React.FC<AddVMDialogProps> = ({
             />
           </div>
 
-          {/* Master 節點 IP */}
-          <div className="space-y-2">
-            <Label htmlFor="masterIP" className="text-sm font-medium text-foreground">
-              Master 節點 IP
-            </Label>
-            <Input
-              id="masterIP"
-              value={masterIP}
-              onChange={(e) => setMasterIP(e.target.value)}
-              placeholder="例：192.168.1.100"
-              className="w-full"
-            />
-          </div>
-
-          {/* Worker 節點 IP */}
-          <div className="space-y-2">
-            <Label htmlFor="workerIPs" className="text-sm font-medium text-foreground">
-              Worker 節點 IP (每行一個)
-            </Label>
-            <Textarea
-              id="workerIPs"
-              value={workerIPs}
-              onChange={(e) => setWorkerIPs(e.target.value)}
-              placeholder="192.168.1.101&#10;192.168.1.102"
-              className="w-full min-h-[80px]"
-            />
-            <p className="text-xs text-muted-foreground">至少需要一個 Worker 節點</p>
-          </div>
-
-          {/* SSH 使用者 */}
-          <div className="space-y-2">
-            <Label htmlFor="sshUser" className="text-sm font-medium text-foreground">
-              SSH 使用者
-            </Label>
-            <Input
-              id="sshUser"
-              value={sshUser}
-              onChange={(e) => setSshUser(e.target.value)}
-              className="w-full"
-            />
-          </div>
-
-          {/* SSH 埠號 */}
-          <div className="space-y-2">
-            <Label htmlFor="sshPort" className="text-sm font-medium text-foreground">
-              SSH 埠號
-            </Label>
-            <Input
-              id="sshPort"
-              value={sshPort}
-              onChange={(e) => setSshPort(e.target.value)}
-              className="w-full"
-            />
-          </div>
-
-          {/* 認證方式 */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium text-foreground">認證方式</Label>
-            <RadioGroup
-              value={authMethod}
-              onValueChange={setAuthMethod}
-              className="flex gap-6"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="ssh-key" id="ssh-key" />
-                <Label htmlFor="ssh-key" className="text-sm text-foreground">SSH 密鑰</Label>
+          {/* Master 節點配置 */}
+          <div className="space-y-4 p-4 bg-muted/20 rounded-lg border">
+            <h3 className="text-sm font-medium text-foreground">🖥️ Master 節點</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="masterName" className="text-xs font-medium text-foreground">
+                  節點名稱
+                </Label>
+                <Input
+                  id="masterName"
+                  value={masterName}
+                  onChange={(e) => setMasterName(e.target.value)}
+                  placeholder="k8s-master"
+                  className="w-full"
+                />
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="password" id="password" />
-                <Label htmlFor="password" className="text-sm text-foreground">帳號密碼</Label>
+              <div className="space-y-2">
+                <Label htmlFor="masterIP" className="text-xs font-medium text-foreground">
+                  IP 位址 *
+                </Label>
+                <Input
+                  id="masterIP"
+                  value={masterIP}
+                  onChange={(e) => setMasterIP(e.target.value)}
+                  placeholder="192.168.1.60"
+                  className="w-full"
+                  required
+                />
               </div>
-            </RadioGroup>
+            </div>
           </div>
 
-          {/* SSH 私鑰路徑 */}
-          <div className="space-y-2">
-            <Label htmlFor="sshKeyPath" className="text-sm font-medium text-foreground">
-              SSH 私鑰路徑
-            </Label>
-            <Input
-              id="sshKeyPath"
-              value={sshKeyPath}
-              onChange={(e) => setSshKeyPath(e.target.value)}
-              className="w-full"
-            />
-            <p className="text-xs text-muted-foreground">請提供 SSH 私鑰的完整路徑</p>
+          {/* Worker 節點配置 */}
+          <div className="space-y-4 p-4 bg-muted/20 rounded-lg border">
+            <h3 className="text-sm font-medium text-foreground">💼 Worker 節點</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="workerName" className="text-xs font-medium text-foreground">
+                  節點名稱
+                </Label>
+                <Input
+                  id="workerName"
+                  value={workerName}
+                  onChange={(e) => setWorkerName(e.target.value)}
+                  placeholder="k8s-worker"
+                  className="w-full"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="workerIP" className="text-xs font-medium text-foreground">
+                  IP 位址 *
+                </Label>
+                <Input
+                  id="workerIP"
+                  value={workerIP}
+                  onChange={(e) => setWorkerIP(e.target.value)}
+                  placeholder="192.168.1.61"
+                  className="w-full"
+                  required
+                />
+              </div>
+            </div>
+            <div className="text-xs text-muted-foreground bg-blue-50 p-2 rounded">
+              📝 系統限定為 1 個 Master + 1 個 Worker 節點架構
+            </div>
+          </div>
+
+          {/* SSH 配置 */}
+          <div className="space-y-4 p-4 bg-muted/20 rounded-lg border">
+            <h3 className="text-sm font-medium text-foreground">🔐 SSH 配置</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="sshUser" className="text-xs font-medium text-foreground">
+                  SSH 使用者
+                </Label>
+                <Input
+                  id="sshUser"
+                  value={sshUser}
+                  onChange={(e) => setSshUser(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="sshPort" className="text-xs font-medium text-foreground">
+                  SSH 埠號
+                </Label>
+                <Input
+                  id="sshPort"
+                  type="number"
+                  value={sshPort}
+                  onChange={(e) => setSshPort(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="sshKeyPath" className="text-xs font-medium text-foreground">
+                SSH 私鑰路徑
+              </Label>
+              <Input
+                id="sshKeyPath"
+                value={sshKeyPath}
+                onChange={(e) => setSshKeyPath(e.target.value)}
+                className="w-full"
+                readOnly
+              />
+              <p className="text-xs text-muted-foreground bg-yellow-50 p-2 rounded">
+                📝 私鑰路徑固定為 container 內部路徑，請將私鑰放置於 host 的 data/ssh_keys/id_rsa
+              </p>
+            </div>
           </div>
 
           {/* 描述 */}
@@ -202,12 +277,19 @@ export const AddVMDialog: React.FC<AddVMDialogProps> = ({
           >
             取消
           </Button>
-          <Button 
+          <Button
             onClick={handleSubmit}
             className="px-8 bg-primary hover:bg-primary/90 text-primary-foreground"
-            disabled={!configName || !masterIP || !workerIPs.trim()}
+            disabled={!configName || !masterIP || !workerIP || isSubmitting}
           >
-            新增
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                建立中...
+              </>
+            ) : (
+              '新增'
+            )}
           </Button>
         </div>
       </DialogContent>

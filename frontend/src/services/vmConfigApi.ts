@@ -6,35 +6,58 @@
 const API_BASE_URL = '/api/v1'
 
 interface VMNode {
-  ip_address: string
-  hostname: string
-  role: string
-  ssh_port: number
+  name: string
+  ip: string
+  role: 'master' | 'worker'
+}
+
+interface SSHConfig {
+  user: string
+  port: number
+  private_key_path: string
 }
 
 interface VMConfigCreate {
   name: string
-  master_nodes: VMNode[]
-  worker_nodes: VMNode[]
-  ssh_username: string
+  description?: string
+  nodes: VMNode[]
+  ssh_config: SSHConfig
 }
 
-interface VMConfigUpdate extends Partial<VMConfigCreate> {}
+interface VMConfigUpdate {
+  name?: string
+  description?: string
+  nodes?: VMNode[]
+  ssh_config?: SSHConfig
+}
 
-interface VMConfig extends VMConfigCreate {
+interface VMConfig {
   id: string
-  connection_status: string
-  last_tested_at?: string
-  error_message?: string
+  name: string
+  description?: string
+  nodes: VMNode[]
+  ssh_config: SSHConfig
   created_at: string
   updated_at: string
+  is_active: boolean
+  last_tested_at?: string
 }
 
 interface TestConnectionResult {
   success: boolean
   message: string
-  error?: string
   tested_at: string
+  nodes: Array<{
+    name: string
+    ip: string
+    role: string
+    success: boolean
+    error?: string
+    response_time?: number
+  }>
+  total_nodes: number
+  successful_nodes: number
+  failed_nodes: number
 }
 
 class VMConfigAPI {
@@ -52,6 +75,11 @@ class VMConfigAPI {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
       throw new Error(errorData.detail || errorData.message || `HTTP ${response.status}`)
+    }
+
+    // 處理 204 No Content 回應（如 DELETE 操作）
+    if (response.status === 204) {
+      return null as T
     }
 
     return response.json()
@@ -80,7 +108,7 @@ class VMConfigAPI {
   }
 
   async delete(id: string): Promise<void> {
-    await this.request<void>(`/vm-configs/${id}`, {
+    await this.request<null>(`/vm-configs/${id}`, {
       method: 'DELETE',
     })
   }
@@ -93,4 +121,4 @@ class VMConfigAPI {
 }
 
 export const vmConfigApi = new VMConfigAPI()
-export type { VMConfig, VMConfigCreate, VMConfigUpdate, VMNode, TestConnectionResult }
+export type { VMConfig, VMConfigCreate, VMConfigUpdate, VMNode, SSHConfig, TestConnectionResult }
