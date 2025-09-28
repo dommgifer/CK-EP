@@ -206,19 +206,9 @@ export const ExamSetupDialog: React.FC<ExamSetupDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl bg-background border border-border">
         <DialogHeader className="space-y-4">
-          <div className="flex items-center justify-between">
-            <DialogTitle className="text-2xl font-bold text-foreground">
-              Kubernetes 考試設定
-            </DialogTitle>
-            <Button
-              variant="ghost" 
-              size="icon"
-              onClick={() => onOpenChange(false)}
-              className="h-8 w-8 rounded-full hover:bg-muted"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+          <DialogTitle className="text-2xl font-bold text-foreground">
+            Kubernetes 考試設定
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
