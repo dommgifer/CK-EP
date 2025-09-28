@@ -199,23 +199,13 @@ export const DeploymentDialog: React.FC<DeploymentDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl max-h-[90vh] bg-background border border-border">
         <DialogHeader className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Rocket className="h-6 w-6 text-blue-500" />
-              <DialogTitle className="text-2xl font-bold text-foreground">
-                正在部屬 Kubernetes 集群
-              </DialogTitle>
-            </div>
-            <Button
-              variant="ghost" 
-              size="icon"
-              onClick={() => onOpenChange(false)}
-              className="h-8 w-8 rounded-full hover:bg-muted"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+          <div className="flex items-center gap-3">
+            <Rocket className="h-6 w-6 text-blue-500" />
+            <DialogTitle className="text-2xl font-bold text-foreground">
+              正在部屬 Kubernetes 集群
+            </DialogTitle>
           </div>
-          
+
           <div className="space-y-2">
             <p className="text-muted-foreground">
               請稍候，正在為您的考試環境部署 Kubernetes 集群...
