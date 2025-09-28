@@ -23,7 +23,11 @@ import { vmConfigApi, type VMConfig } from '@/services/vmConfigApi';
 interface ExamSetupDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onStartDeployment: () => void;
+  onStartDeployment: (params: {
+    examType: string;
+    examSet: string;
+    vmConfigId: string;
+  }) => void;
 }
 
 export const ExamSetupDialog: React.FC<ExamSetupDialogProps> = ({
@@ -93,8 +97,26 @@ export const ExamSetupDialog: React.FC<ExamSetupDialogProps> = ({
   };
 
   const handleStartDeployment = () => {
-    onStartDeployment();
-    onOpenChange(false);
+    // 檢查必要參數
+    if (!examType) {
+      alert('請選擇考試類型');
+      return;
+    }
+    if (!examSet) {
+      alert('請選擇題組');
+      return;
+    }
+    if (!vmConfig) {
+      alert('請選擇VM配置');
+      return;
+    }
+
+    // 傳遞部署參數
+    onStartDeployment({
+      examType,
+      examSet,
+      vmConfigId: vmConfig,
+    });
   };
 
   const handleAddVM = async (vmConfigData: any) => {
@@ -402,18 +424,19 @@ export const ExamSetupDialog: React.FC<ExamSetupDialogProps> = ({
 
         {/* 底部按鈕 */}
         <div className="flex justify-end gap-3 pt-4 border-t border-border">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => onOpenChange(false)}
             className="px-6"
           >
             取消
           </Button>
-          <Button 
+          <Button
             onClick={handleStartDeployment}
-            className="px-8 bg-primary hover:bg-primary/90 text-primary-foreground"
+            disabled={!examType || !examSet || !vmConfig || loading || vmLoading}
+            className="px-8 bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            建立考試環境
+            {(!examType || !examSet || !vmConfig) ? '請完成設定' : '建立考試環境'}
           </Button>
         </div>
       </DialogContent>

@@ -15,12 +15,22 @@ const HomePage = () => {
   const [examStarted, setExamStarted] = useState(false)
   const [showExamSetupDialog, setShowExamSetupDialog] = useState(false)
   const [showDeploymentDialog, setShowDeploymentDialog] = useState(false)
+  const [deploymentParams, setDeploymentParams] = useState<{
+    examType: string;
+    examSet: string;
+    vmConfigId: string;
+  } | undefined>(undefined)
 
   const startDeployment = () => {
     setShowExamSetupDialog(true)
   }
 
-  const handleStartDeployment = () => {
+  const handleStartDeployment = (params: {
+    examType: string;
+    examSet: string;
+    vmConfigId: string;
+  }) => {
+    setDeploymentParams(params)
     setShowExamSetupDialog(false)
     setShowDeploymentDialog(true)
   }
@@ -112,6 +122,7 @@ const HomePage = () => {
         open={showDeploymentDialog}
         onOpenChange={setShowDeploymentDialog}
         onDeploymentComplete={handleDeploymentComplete}
+        deploymentParams={deploymentParams}
       />
     </div>
   )
