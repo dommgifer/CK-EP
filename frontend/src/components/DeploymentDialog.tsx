@@ -249,15 +249,7 @@ export const DeploymentDialog: React.FC<DeploymentDialogProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center justify-between py-2 border-t border-border">
-          <div className="flex items-center gap-2">
-            {!isDeploymentComplete ? (
-              <Settings className="h-4 w-4 text-muted-foreground animate-spin" />
-            ) : (
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
-            )}
-            <span className="text-sm text-muted-foreground">正在執行: 加入Worker節點</span>
-          </div>
+        <div className="flex items-center justify-end py-2 border-t border-border">
           <div className="flex items-center gap-4">
             <div className="text-xs text-muted-foreground">
               已用時間：0:28
