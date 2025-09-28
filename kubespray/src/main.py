@@ -8,6 +8,8 @@ import logging
 from fastapi import FastAPI
 
 from .api import kubespray_router
+from .api.connection_test import router as connection_test_router
+from .api.deployment import router as deployment_router
 
 # 設定日誌
 logging.basicConfig(level=logging.INFO)
@@ -22,6 +24,8 @@ app = FastAPI(
 
 # 註冊路由
 app.include_router(kubespray_router, tags=["Kubespray"])
+app.include_router(connection_test_router, prefix="/vm-configs", tags=["Connection Test"])
+app.include_router(deployment_router, tags=["Deployment"])
 
 # 根路由
 @app.get("/")

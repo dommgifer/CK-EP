@@ -2,24 +2,25 @@ FROM quay.io/kubespray/kubespray:v2.23.1
 
 # 安裝 Python FastAPI 依賴
 USER root
-RUN pip install fastapi uvicorn pydantic
 
 # 建立 API 應用程式目錄
-RUN mkdir -p /kubespray/api
+RUN mkdir -p /app
+
+# 複製 requirements.txt 並安裝依賴
+COPY requirements.txt /app/
+RUN pip install -r /app/requirements.txt
 
 # 複製整個 src 目錄
-COPY src/ /kubespray/api/src/
+COPY src/ /app/src/
 
 # 設定 mount 點
-RUN mkdir -p /kubespray/inventory
-RUN mkdir -p /kubespray/templates  
-RUN mkdir -p /kubespray/question_sets
+RUN mkdir -p /app/data
 
 # 設定工作目錄
-WORKDIR /kubespray/api
+WORKDIR /app
 
 # 設定 Python 路徑
-ENV PYTHONPATH=/kubespray/api
+ENV PYTHONPATH=/app
 
 # 暴露 API 端口
 EXPOSE 8080
