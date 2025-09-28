@@ -71,8 +71,8 @@ async def start_deployment(session_id: str, request: DeployRequest):
 
     # 1. 驗證 inventory 存在
     inventory_path = f"/kubespray/inventory/{session_id}"
-    if not os.path.exists(f"{inventory_path}/hosts.yaml"):
-        logger.error(f"Inventory 配置不存在: {inventory_path}/hosts.yaml")
+    if not os.path.exists(f"{inventory_path}/inventory.ini"):
+        logger.error(f"Inventory 配置不存在: {inventory_path}/inventory.ini")
         raise HTTPException(404, "Inventory 配置不存在，請先生成配置")
 
     # 2. 檢查是否已有運行中的部署
@@ -188,13 +188,13 @@ async def _execute_deployment(session_id: str, request: DeployRequest):
     try:
         logger.info(f"開始執行部署 - Session: {session_id}")
 
-        # 1. 準備 Ansible 命令
+        # 1. 準備 Ansible 命令 (根據官方文件格式)
         ansible_cmd = [
             "ansible-playbook",
+            "-i", f"/kubespray/inventory/{session_id}/inventory.ini",
             f"/kubespray/{request.playbook}",
-            "-i", f"/kubespray/inventory/{session_id}/hosts.yaml",
-            "--become",
-            "--become-user=root",
+            "-b",  # --become (官方使用 -b)
+            "--private-key", "/root/.ssh/id_rsa",
             "-v"  # verbose output
         ]
 
