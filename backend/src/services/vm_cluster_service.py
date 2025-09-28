@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 import redis
 from contextlib import asynccontextmanager
+import httpx
+from fastapi import HTTPException
 
 from ..models.vm_cluster_config import (
     VMClusterConfig,
@@ -28,6 +30,7 @@ class VMClusterService:
 
     VM_CONFIG_CACHE_KEY = "vm_cluster_config"
     CACHE_TIMEOUT = 3600  # 1小時
+    KUBESPRAY_API_URL = "http://k8s-exam-kubespray-api:8080"
 
     def __init__(self, db: Session, redis_client: Optional[redis.Redis] = None):
         self.db = db
@@ -192,7 +195,7 @@ class VMClusterService:
             raise RuntimeError(f"刪除 VM 配置失敗: {str(e)}")
 
     async def test_vm_connection(self, config_id: str) -> VMConnectionTestResult:
-        """測試 VM 連線"""
+        """測試 VM 連線 - 直接代理到 Kubespray API (使用 paramiko)"""
         db_config = self.db.query(VMClusterConfig).filter(
             VMClusterConfig.id == config_id,
             VMClusterConfig.is_active == "true"
@@ -201,122 +204,47 @@ class VMClusterService:
         if not db_config:
             raise ValueError(f"VM 配置 '{config_id}' 不存在")
 
-        config_data = json.loads(db_config.config_json)
-        nodes = config_data["nodes"]
-        ssh_config = config_data["ssh_config"]
-
-        test_results = []
-        successful_nodes = 0
-        failed_nodes = 0
-
-        # 並行測試所有節點
-        tasks = []
-        for node in nodes:
-            task = self._test_single_node(node, ssh_config)
-            tasks.append(task)
-
-        node_results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        for i, result in enumerate(node_results):
-            if isinstance(result, Exception):
-                test_results.append({
-                    "name": nodes[i]["name"],
-                    "ip": nodes[i]["ip"],
-                    "role": nodes[i]["role"],
-                    "success": False,
-                    "error": str(result),
-                    "response_time": None
-                })
-                failed_nodes += 1
-            else:
-                test_results.append(result)
-                if result["success"]:
-                    successful_nodes += 1
-                else:
-                    failed_nodes += 1
-
-        # 建立測試結果
-        test_result = VMConnectionTestResult(
-            success=successful_nodes > 0 and failed_nodes == 0,
-            message=f"測試完成：{successful_nodes} 成功，{failed_nodes} 失敗",
-            tested_at=datetime.utcnow(),
-            nodes=test_results,
-            total_nodes=len(nodes),
-            successful_nodes=successful_nodes,
-            failed_nodes=failed_nodes
-        )
-
-        # 儲存測試結果到資料庫
         try:
-            db_config.last_tested_at = test_result.tested_at
-            db_config.test_result_json = json.dumps(test_result.dict())
+            # 直接代理到 Kubespray API 進行 SSH 連線測試
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    f"{self.KUBESPRAY_API_URL}/vm-configs/{config_id}/test-connection"
+                )
+
+            if response.status_code != 200:
+                error_detail = response.text
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"Kubespray API 測試失敗: {error_detail}"
+                )
+
+            # 解析回應並建立結果物件
+            result_data = response.json()
+            result = VMConnectionTestResult(**result_data)
+
+            # 儲存測試結果到資料庫
+            await self._save_test_result(db_config, result)
+
+            return result
+
+        except httpx.RequestError as e:
+            raise RuntimeError(f"無法連接到 Kubespray API: {str(e)}")
+        except httpx.HTTPStatusError as e:
+            raise RuntimeError(f"Kubespray API 回應錯誤: {e.response.status_code}")
+        except Exception as e:
+            raise RuntimeError(f"測試 VM 連線失敗: {str(e)}")
+
+    async def _save_test_result(self, db_config: VMClusterConfig, result: VMConnectionTestResult):
+        """儲存測試結果到資料庫"""
+        try:
+            db_config.last_tested_at = result.tested_at
+            db_config.test_result_json = json.dumps(result.dict(), default=str)
             self.db.commit()
         except Exception as e:
             self.db.rollback()
             # 不中斷測試流程，只記錄錯誤
             print(f"Warning: Failed to save test result: {e}")
 
-        return test_result
-
-    async def _test_single_node(self, node: Dict[str, Any], ssh_config: Dict[str, Any]) -> Dict[str, Any]:
-        """測試單一節點連線"""
-        import time
-        start_time = time.time()
-
-        try:
-            # 構建 SSH 測試命令
-            ssh_cmd = [
-                "ssh",
-                "-o", "ConnectTimeout=10",
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "BatchMode=yes",
-                "-p", str(ssh_config.get("port", 22)),
-                "-i", "/root/.ssh/id_rsa",  # 固定路徑
-                f"{ssh_config['user']}@{node['ip']}",
-                "echo 'connection_test_ok'"
-            ]
-
-            # 執行 SSH 測試
-            result = await asyncio.create_subprocess_exec(
-                *ssh_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-
-            stdout, stderr = await result.communicate()
-            response_time = time.time() - start_time
-
-            if result.returncode == 0 and b"connection_test_ok" in stdout:
-                return {
-                    "name": node["name"],
-                    "ip": node["ip"],
-                    "role": node["role"],
-                    "success": True,
-                    "error": None,
-                    "response_time": round(response_time, 3)
-                }
-            else:
-                error_msg = stderr.decode().strip() or "SSH 連線失敗"
-                return {
-                    "name": node["name"],
-                    "ip": node["ip"],
-                    "role": node["role"],
-                    "success": False,
-                    "error": error_msg,
-                    "response_time": round(response_time, 3)
-                }
-
-        except Exception as e:
-            response_time = time.time() - start_time
-            return {
-                "name": node["name"],
-                "ip": node["ip"],
-                "role": node["role"],
-                "success": False,
-                "error": str(e),
-                "response_time": round(response_time, 3)
-            }
 
     async def _update_cache(self, db_config: VMClusterConfig):
         """更新快取"""
