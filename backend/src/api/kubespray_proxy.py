@@ -175,10 +175,20 @@ async def generate_kubespray_inventory(
         # 更新請求中的 session_id 以確保一致性
         request.session_id = session_id
 
+        # 序列化請求資料，處理 datetime 欄位
+        request_data = request.model_dump()
+        # 移除可能造成序列化問題的 datetime 欄位
+        if 'vm_config' in request_data and isinstance(request_data['vm_config'], dict):
+            vm_config = request_data['vm_config']
+            # 移除所有 datetime 欄位
+            vm_config.pop('created_at', None)
+            vm_config.pop('updated_at', None)
+            vm_config.pop('last_tested_at', None)
+
         async with httpx.AsyncClient(timeout=300.0) as client:
             response = await client.post(
                 f"{KUBESPRAY_API_URL}/exam-sessions/{session_id}/kubespray/inventory",
-                json=request.model_dump(),
+                json=request_data,
                 headers={"Content-Type": "application/json"}
             )
             response.raise_for_status()
