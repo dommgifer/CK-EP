@@ -353,42 +353,40 @@ export const ExamSetupDialog: React.FC<ExamSetupDialogProps> = ({
                     )}
                   </div>
                   <div className="flex items-center gap-3">
-                    {/* 連線狀態指示器 */}
-                    {connectionStatus.status === 'success' && (
-                      <div className="flex items-center gap-1.5 text-green-600">
-                        <Check className="h-4 w-4" />
-                        <span className="text-sm font-medium">連線成功</span>
-                        {connectionStatus.successNodes && connectionStatus.totalNodes && (
-                          <span className="text-xs text-muted-foreground">
-                            ({connectionStatus.successNodes}/{connectionStatus.totalNodes})
-                          </span>
-                        )}
-                      </div>
-                    )}
-
-                    {connectionStatus.status === 'error' && (
-                      <div className="flex items-center gap-1.5 text-red-600">
-                        <AlertCircle className="h-4 w-4" />
-                        <span className="text-sm font-medium">連線失敗</span>
-                      </div>
-                    )}
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-sm"
-                      onClick={handleTestConnection}
-                      disabled={testingConnection}
-                    >
-                      {testingConnection ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                          測試中
-                        </>
-                      ) : (
-                        '測試連線'
+                    {/* 測試連線按鈕和狀態 */}
+                    <div className="flex items-center gap-2">
+                      {/* 連線狀態指示器 - 顯示在測試連線按鈕左邊 */}
+                      {connectionStatus.status === 'success' && (
+                        <div className="flex items-center gap-1 text-green-600">
+                          <Check className="h-4 w-4" />
+                          <span className="text-sm">連線成功</span>
+                        </div>
                       )}
-                    </Button>
+
+                      {connectionStatus.status === 'error' && (
+                        <div className="flex items-center gap-1 text-red-600">
+                          <AlertCircle className="h-4 w-4" />
+                          <span className="text-sm">連線失敗</span>
+                        </div>
+                      )}
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-sm"
+                        onClick={handleTestConnection}
+                        disabled={testingConnection}
+                      >
+                        {testingConnection ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                            測試中
+                          </>
+                        ) : (
+                          '測試連線'
+                        )}
+                      </Button>
+                    </div>
                     <Button
                       variant="destructive"
                       size="sm"
