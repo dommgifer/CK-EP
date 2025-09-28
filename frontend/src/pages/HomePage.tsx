@@ -8,11 +8,13 @@ import { mockQuestions, examConfig } from '../data/questions'
 import { Card } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { ExamSetupDialog } from '../components/ExamSetupDialog'
+import { DeploymentDialog } from '../components/DeploymentDialog'
 // import heroImage from '../assets/k8s-hero.jpg'
 
 const HomePage = () => {
   const [examStarted, setExamStarted] = useState(false)
   const [showExamSetupDialog, setShowExamSetupDialog] = useState(false)
+  const [showDeploymentDialog, setShowDeploymentDialog] = useState(false)
 
   const startDeployment = () => {
     setShowExamSetupDialog(true)
@@ -20,7 +22,12 @@ const HomePage = () => {
 
   const handleStartDeployment = () => {
     setShowExamSetupDialog(false)
-    // 這裡可以添加部署邏輯
+    setShowDeploymentDialog(true)
+  }
+
+  const handleDeploymentComplete = () => {
+    setShowDeploymentDialog(false)
+    setExamStarted(true)
   }
 
   if (examStarted) {
@@ -98,6 +105,13 @@ const HomePage = () => {
         open={showExamSetupDialog}
         onOpenChange={setShowExamSetupDialog}
         onStartDeployment={handleStartDeployment}
+      />
+
+      {/* Deployment Dialog */}
+      <DeploymentDialog
+        open={showDeploymentDialog}
+        onOpenChange={setShowDeploymentDialog}
+        onDeploymentComplete={handleDeploymentComplete}
       />
     </div>
   )
