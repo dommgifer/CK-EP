@@ -116,12 +116,18 @@ async def stream_deployment_logs(session_id: str):
         try:
             logger.info(f"開始 SSE 流 - Session: {session_id}")
 
+            # 發送初始連線確認訊息
+            yield f"event: connected\ndata: {json.dumps({'session_id': session_id, 'status': 'connected'})}\n\n"
+
             # 監聽即時 logs
             pubsub = redis_client.pubsub()
             await pubsub.subscribe(f"session:{session_id}:deploy:logs")
 
             async for message in pubsub.listen():
-                if message['type'] == 'message':
+                # 跳過訂閱確認訊息
+                if message['type'] == 'subscribe':
+                    continue
+                elif message['type'] == 'message':
                     try:
                         event_data = json.loads(message['data'])
                         event_type = event_data.get('event_type', 'log')
@@ -188,11 +194,11 @@ async def _execute_deployment(session_id: str, request: DeployRequest):
     try:
         logger.info(f"開始執行部署 - Session: {session_id}")
 
-        # 1. 準備 Ansible 命令 (根據官方文件格式)
+        # 1. 準備 Ansible 命令 (切換到 kubespray 目錄並使用相對路徑)
         ansible_cmd = [
             "ansible-playbook",
-            "-i", f"/kubespray/inventory/{session_id}/inventory.ini",
-            f"/kubespray/{request.playbook}",
+            "-i", f"inventory/{session_id}/inventory.ini",
+            request.playbook,  # cluster.yml (相對路徑)
             "-b",  # --become (官方使用 -b)
             "--private-key", "/root/.ssh/id_rsa",
             "-v"  # verbose output

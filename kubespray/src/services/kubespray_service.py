@@ -1,6 +1,7 @@
 import os
 import yaml
 import shutil
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -74,7 +75,8 @@ class KubesprayInventoryService:
         k8s_cluster_config = await self._generate_k8s_cluster_config(question_set_id)
         k8s_cluster_path = group_vars_k8s_dir / "k8s-cluster.yml"
         with open(k8s_cluster_path, 'w', encoding='utf-8') as f:
-            yaml.safe_dump(k8s_cluster_config, f, default_flow_style=False)
+            # 確保版本號保持字串格式
+            self._dump_yaml_with_quoted_versions(k8s_cluster_config, f)
         generated_files.append(str(k8s_cluster_path))
 
         # 5. 複製 addons.yml
@@ -161,7 +163,9 @@ class KubesprayInventoryService:
 
         # 如果有題組 ID，載入覆蓋配置
         if question_set_id:
-            question_set_parts = question_set_id.strip('/').split('/')
+            # 支援兩種格式：cks/001 和 cks-001，統一轉換為路徑格式
+            normalized_id = question_set_id.strip('/').replace('-', '/')
+            question_set_parts = normalized_id.split('/')
             if len(question_set_parts) >= 2:
                 exam_type, set_id = question_set_parts[0], question_set_parts[1]
                 overwrite_path = self.question_sets_path / exam_type / set_id / "base-overwrite.yml"
@@ -182,7 +186,9 @@ class KubesprayInventoryService:
     async def _copy_network_configs(self, target_dir: Path, question_set_id: str, generated_files: List[str]) -> None:
         """複製題組特定的網路配置檔案"""
         try:
-            question_set_parts = question_set_id.strip('/').split('/')
+            # 支援兩種格式：cks/001 和 cks-001，統一轉換為路徑格式
+            normalized_id = question_set_id.strip('/').replace('-', '/')
+            question_set_parts = normalized_id.split('/')
             if len(question_set_parts) >= 2:
                 exam_type, set_id = question_set_parts[0], question_set_parts[1]
                 network_dir = self.question_sets_path / exam_type / set_id / "network"
@@ -209,3 +215,37 @@ class KubesprayInventoryService:
                 result[key] = value
 
         return result
+
+    def _dump_yaml_with_quoted_versions(self, data: Dict[str, Any], file) -> None:
+        """自定義 YAML 輸出，確保版本號字段保持字串格式"""
+        import io
+        from yaml.representer import SafeRepresenter
+        from yaml import SafeDumper
+
+        class CustomSafeDumper(SafeDumper):
+            pass
+
+        def represent_str(dumper, data):
+            # 版本號相關的欄位強制使用引號
+            if any(key in dumper.yaml_representers and
+                   isinstance(dumper.yaml_representers[key], type) and
+                   'version' in str(data).lower() for key in dumper.yaml_representers):
+                return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='"')
+            return dumper.represent_scalar('tag:yaml.org,2002:str', data)
+
+        # 針對特定欄位使用自定義表示
+        version_fields = {'kube_version', 'kubernetes_version', 'etcd_version', 'calico_version'}
+
+        # 簡單方法：先轉換為字串，再使用標準輸出
+        output = io.StringIO()
+        yaml.safe_dump(data, output, default_flow_style=False, allow_unicode=True)
+        content = output.getvalue()
+
+        # 修復版本號格式
+        import re
+        for field in version_fields:
+            pattern = f'^({field}): ([0-9\\.]+)$'
+            replacement = f'\\1: "\\2"'
+            content = re.sub(pattern, replacement, content, flags=re.MULTILINE)
+
+        file.write(content)

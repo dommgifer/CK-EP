@@ -1,4 +1,4 @@
-FROM quay.io/kubespray/kubespray:v2.23.1
+FROM quay.io/kubespray/kubespray:v2.28.1
 
 # 安裝 Python FastAPI 依賴
 USER root
