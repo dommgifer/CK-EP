@@ -14,7 +14,6 @@ import logging
 from datetime import datetime
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import redis.asyncio as redis
 
@@ -108,63 +107,7 @@ async def start_deployment(session_id: str, request: DeployRequest):
     )
 
 
-@router.get("/exam-sessions/{session_id}/kubespray/deploy/logs/stream")
-async def stream_deployment_logs(session_id: str):
-    """SSE 端點，提供即時 log 流"""
 
-    async def event_generator():
-        try:
-            logger.info(f"開始 SSE 流 - Session: {session_id}")
-
-            # 發送初始連線確認訊息
-            yield f"event: connected\ndata: {json.dumps({'session_id': session_id, 'status': 'connected'})}\n\n"
-
-            # 監聽即時 logs
-            pubsub = redis_client.pubsub()
-            await pubsub.subscribe(f"session:{session_id}:deploy:logs")
-
-            async for message in pubsub.listen():
-                # 跳過訂閱確認訊息
-                if message['type'] == 'subscribe':
-                    continue
-                elif message['type'] == 'message':
-                    try:
-                        event_data = json.loads(message['data'])
-                        event_type = event_data.get('event_type', 'log')
-                        data_payload = json.dumps(event_data['data'])
-
-                        yield f"event: {event_type}\ndata: {data_payload}\n\n"
-
-                        # 如果是完成或失敗事件，結束流
-                        if event_type == 'status' and event_data['data'].get('status') in ['completed', 'failed']:
-                            logger.info(f"部署結束，關閉 SSE 流 - Session: {session_id}")
-                            break
-
-                    except (json.JSONDecodeError, KeyError) as e:
-                        logger.error(f"SSE 訊息解析錯誤: {e}")
-                        continue
-
-        except asyncio.CancelledError:
-            logger.info(f"SSE 流被取消 - Session: {session_id}")
-        except Exception as e:
-            logger.error(f"SSE 流錯誤: {e}")
-            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
-        finally:
-            try:
-                await pubsub.unsubscribe()
-                await pubsub.close()
-            except:
-                pass
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"  # 禁用 nginx 緩衝
-        }
-    )
 
 
 @router.get("/exam-sessions/{session_id}/kubespray/deploy/status", response_model=DeploymentStatusResponse)

@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from .api import kubespray_router
 from .api.connection_test import router as connection_test_router
 from .api.deployment import router as deployment_router
+from .api.websocket_deployment import router as websocket_deployment_router
 
 # 設定日誌
 logging.basicConfig(level=logging.INFO)
@@ -26,6 +27,7 @@ app = FastAPI(
 app.include_router(kubespray_router, tags=["Kubespray"])
 app.include_router(connection_test_router, prefix="/vm-configs", tags=["Connection Test"])
 app.include_router(deployment_router, tags=["Deployment"])
+app.include_router(websocket_deployment_router, tags=["WebSocket Deployment"])
 
 # 根路由
 @app.get("/")
