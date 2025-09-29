@@ -4,8 +4,10 @@ Kubespray API 代理路由
 """
 import json
 import logging
+import asyncio
+from datetime import datetime
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from typing import Any, Dict, List
 
@@ -375,59 +377,66 @@ async def start_kubespray_deployment(
         )
 
 
-@router.get("/exam-sessions/{session_id}/kubespray/deploy/logs/stream")
-async def stream_deployment_logs(session_id: str):
+@router.websocket("/exam-sessions/{session_id}/kubespray/deploy/logs/ws")
+async def websocket_deployment_logs_proxy(websocket: WebSocket, session_id: str):
     """
-    即時部署 Log 流 (SSE)
-    代理到: GET /exam-sessions/{session_id}/kubespray/deploy/logs/stream
+    即時部署 Log WebSocket 代理
+    直接代理到 Kubespray API 的 WebSocket 端點
     """
+    await websocket.accept()
+    
     try:
-        async with httpx.AsyncClient(timeout=None) as client:
-            async with client.stream(
-                "GET",
-                f"{KUBESPRAY_API_URL}/exam-sessions/{session_id}/kubespray/deploy/logs/stream",
-                headers={"Accept": "text/event-stream"}
-            ) as response:
-                response.raise_for_status()
-
-                async def event_generator():
-                    try:
-                        async for chunk in response.aiter_text():
-                            yield chunk
-                    except httpx.StreamClosed:
-                        logger.info(f"SSE 串流已關閉 - Session: {session_id}")
-                    except Exception as e:
-                        logger.error(f"SSE 串流錯誤: {e}")
-                        yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
-
-                return StreamingResponse(
-                    event_generator(),
-                    media_type="text/event-stream",
-                    headers={
-                        "Cache-Control": "no-cache",
-                        "Connection": "keep-alive",
-                        "X-Accel-Buffering": "no"  # 禁用 nginx 緩衝
-                    }
-                )
-
-    except httpx.ConnectError:
-        logger.error(f"無法連接到 Kubespray API Server: {KUBESPRAY_API_URL}")
-        raise HTTPException(
-            status_code=503,
-            detail="Kubespray API Server 無法連接"
-        )
-    except httpx.HTTPStatusError as e:
-        logger.error(f"取得部署 Log 流失敗: {e.response.status_code}")
-        raise HTTPException(
-            status_code=e.response.status_code,
-            detail=f"取得部署 Log 流失敗: {e.response.text}"
-        )
+        # 建立到 Kubespray API 的 WebSocket 連線
+        import websockets
+        
+        kubespray_ws_url = f"ws://k8s-exam-kubespray-api:8080/exam-sessions/{session_id}/kubespray/deploy/logs/ws"
+        
+        logger.info(f"正在建立 WebSocket 代理連線: {kubespray_ws_url}")
+        
+        async with websockets.connect(kubespray_ws_url) as kubespray_ws:
+            logger.info(f"WebSocket 代理連線建立成功 - Session: {session_id}")
+            
+            # 創建雙向代理任務
+            async def client_to_server():
+                try:
+                    while True:
+                        data = await websocket.receive_text()
+                        await kubespray_ws.send(data)
+                except WebSocketDisconnect:
+                    logger.info(f"客戶端 WebSocket 斷開 - Session: {session_id}")
+                except Exception as e:
+                    logger.error(f"客戶端到伺服器代理錯誤: {e}")
+            
+            async def server_to_client():
+                try:
+                    async for message in kubespray_ws:
+                        await websocket.send_text(message)
+                except Exception as e:
+                    logger.error(f"伺服器到客戶端代理錯誤: {e}")
+            
+            # 並行執行雙向代理
+            await asyncio.gather(
+                client_to_server(),
+                server_to_client(),
+                return_exceptions=True
+            )
+                
     except Exception as e:
-        logger.error(f"代理部署 Log 流失敗: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"代理請求失敗: {str(e)}"
-        )
+        logger.error(f"WebSocket 代理錯誤: {e}")
+        try:
+            await websocket.send_text(json.dumps({
+                "type": "error",
+                "session_id": session_id,
+                "message": f"代理連線失敗: {str(e)}",
+                "timestamp": datetime.utcnow().isoformat()
+            }))
+        except:
+            pass
+    finally:
+        logger.info(f"WebSocket 代理連線關閉 - Session: {session_id}")
+
+
+
 
 
 @router.get(
