@@ -6,11 +6,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Rocket, Settings, X, CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import { Rocket, CheckCircle2, Clock, AlertCircle, Wifi, WifiOff } from "lucide-react";
 import { deploymentApi, type DeploymentLogEntry, type ExamSessionResponse, type DeploymentStatus } from '@/services/deploymentApi';
+import { createWebSocketDeploymentClient, WebSocketDeploymentClient, WebSocketState } from '@/services/websocketApi';
 
 interface DeploymentDialogProps {
   open: boolean;
@@ -21,12 +21,6 @@ interface DeploymentDialogProps {
     examSet: string;
     vmConfigId: string;
   };
-}
-
-interface DeploymentStep {
-  id: number;
-  title: string;
-  status: 'pending' | 'in-progress' | 'completed';
 }
 
 export const DeploymentDialog: React.FC<DeploymentDialogProps> = ({
@@ -44,9 +38,9 @@ export const DeploymentDialog: React.FC<DeploymentDialogProps> = ({
       }
 
       // 清理資源
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
+      if (wsClientRef.current) {
+        wsClientRef.current.disconnect();
+        wsClientRef.current = null;
       }
       if (statusPollingRef.current) {
         clearInterval(statusPollingRef.current);
@@ -56,6 +50,7 @@ export const DeploymentDialog: React.FC<DeploymentDialogProps> = ({
 
     onOpenChange(shouldClose);
   };
+
   const [currentStatus, setCurrentStatus] = useState("準備中...");
   const [logs, setLogs] = useState<DeploymentLogEntry[]>([]);
   const [isDeploying, setIsDeploying] = useState(false);
@@ -66,7 +61,10 @@ export const DeploymentDialog: React.FC<DeploymentDialogProps> = ({
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [elapsedTime, setElapsedTime] = useState('0:00');
 
-  const eventSourceRef = useRef<EventSource | null>(null);
+  // WebSocket 相關狀態
+  const [wsState, setWsState] = useState<WebSocketState>('disconnected');
+
+  const wsClientRef = useRef<WebSocketDeploymentClient | null>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const statusPollingRef = useRef<NodeJS.Timeout | null>(null);
   const timeUpdateRef = useRef<NodeJS.Timeout | null>(null);
@@ -85,9 +83,9 @@ export const DeploymentDialog: React.FC<DeploymentDialogProps> = ({
   // 清理資源
   useEffect(() => {
     return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
+      if (wsClientRef.current) {
+        wsClientRef.current.disconnect();
+        wsClientRef.current = null;
       }
       if (statusPollingRef.current) {
         clearInterval(statusPollingRef.current);
@@ -144,25 +142,10 @@ export const DeploymentDialog: React.FC<DeploymentDialogProps> = ({
       // 1. 啟動完整部署流程
       const { session, deployment } = await deploymentApi.startFullDeployment(deploymentParams);
       setCurrentSession(session);
-      setCurrentStatus("部署已啟動，正在接收日誌...");
+      setCurrentStatus("部署已啟動，正在建立 WebSocket 連線...");
 
-      // 2. 建立 SSE 連線接收即時日誌
-      const eventSource = deploymentApi.createLogStream(session.id);
-      eventSourceRef.current = eventSource;
-
-      eventSource.onmessage = (event) => {
-        try {
-          const logEntry = deploymentApi.parseLogEntry(event.data);
-          addLogEntry(logEntry);
-        } catch (error) {
-          console.error('解析日誌失敗:', error);
-        }
-      };
-
-      eventSource.onerror = (error) => {
-        console.error('SSE 連線錯誤:', error);
-        setCurrentStatus("日誌連線中斷，正在嘗試重連...");
-      };
+      // 2. 建立 WebSocket 連線接收即時日誌
+      setupWebSocketConnection(session.id);
 
       // 3. 開始輪詢部署狀態
       startStatusPolling(session.id);
@@ -173,6 +156,53 @@ export const DeploymentDialog: React.FC<DeploymentDialogProps> = ({
       setCurrentStatus("部署啟動失敗");
       setIsDeploying(false);
     }
+  };
+
+  // 設定 WebSocket 連線
+  const setupWebSocketConnection = (sessionId: string) => {
+    const wsClient = createWebSocketDeploymentClient(sessionId, {
+      onConnected: () => {
+        setWsState('connected');
+        setCurrentStatus("WebSocket 連線已建立，正在接收部署日誌...");
+        addLogEntry({
+          id: `ws-connected-${Date.now()}`,
+          timestamp: new Date().toLocaleTimeString('zh-TW', { hour12: false }),
+          type: 'success',
+          message: "✅ WebSocket 連線已建立",
+        });
+      },
+      onDisconnected: () => {
+        setWsState('disconnected');
+        setCurrentStatus("WebSocket 連線已斷開");
+      },
+      onError: (error) => {
+        setWsState('error');
+        setCurrentStatus(`WebSocket 錯誤: ${error}`);
+        addLogEntry({
+          id: `ws-error-${Date.now()}`,
+          timestamp: new Date().toLocaleTimeString('zh-TW', { hour12: false }),
+          type: 'error',
+          message: `❌ WebSocket 錯誤: ${error}`,
+        });
+      },
+      onLog: (logEntry) => {
+        addLogEntry(logEntry);
+      },
+      onStatus: (status) => {
+        if (status.status === 'completed') {
+          setIsDeploymentComplete(true);
+          setCurrentStatus("Kubernetes 集群部署完成！準備開始考試");
+        } else if (status.status === 'failed') {
+          setDeploymentError(`部署失敗 (退出代碼: ${status.exit_code})`);
+          setCurrentStatus("部署失敗");
+          setIsDeploying(false);
+        }
+      }
+    });
+
+    wsClientRef.current = wsClient;
+    setWsState('connecting');
+    wsClient.connect();
   };
 
   // 開始狀態輪詢
@@ -186,17 +216,8 @@ export const DeploymentDialog: React.FC<DeploymentDialogProps> = ({
           setIsDeploymentComplete(true);
           setCurrentStatus("Kubernetes 集群部署完成！準備開始考試");
 
-          // 關閉 SSE 連線
-          if (eventSourceRef.current) {
-            eventSourceRef.current.close();
-            eventSourceRef.current = null;
-          }
-
-          // 停止輪詢
-          if (statusPollingRef.current) {
-            clearInterval(statusPollingRef.current);
-            statusPollingRef.current = null;
-          }
+          // 關閉連線
+          cleanupConnections();
 
           // 添加完成日誌
           addLogEntry({
@@ -216,16 +237,7 @@ export const DeploymentDialog: React.FC<DeploymentDialogProps> = ({
           setDeploymentError(`部署失敗 (退出代碼: ${status.exit_code})`);
           setCurrentStatus("部署失敗");
           setIsDeploying(false);
-
-          // 關閉連線和輪詢
-          if (eventSourceRef.current) {
-            eventSourceRef.current.close();
-            eventSourceRef.current = null;
-          }
-          if (statusPollingRef.current) {
-            clearInterval(statusPollingRef.current);
-            statusPollingRef.current = null;
-          }
+          cleanupConnections();
         } else if (status.status === 'running') {
           setCurrentStatus("正在部署 Kubernetes 集群...");
         }
@@ -237,6 +249,18 @@ export const DeploymentDialog: React.FC<DeploymentDialogProps> = ({
     // 立即檢查一次，然後每10秒檢查一次
     checkStatus();
     statusPollingRef.current = setInterval(checkStatus, 10000);
+  };
+
+  // 清理連線
+  const cleanupConnections = () => {
+    if (wsClientRef.current) {
+      wsClientRef.current.disconnect();
+      wsClientRef.current = null;
+    }
+    if (statusPollingRef.current) {
+      clearInterval(statusPollingRef.current);
+      statusPollingRef.current = null;
+    }
   };
 
   // 添加新的日誌條目
@@ -258,6 +282,18 @@ export const DeploymentDialog: React.FC<DeploymentDialogProps> = ({
     }, 1000);
   };
 
+  // 發送 WebSocket 指令
+  const sendWebSocketCommand = (command: string) => {
+    if (wsClientRef.current && wsClientRef.current.isConnected()) {
+      wsClientRef.current.sendCommand(command);
+      addLogEntry({
+        id: `command-${Date.now()}`,
+        timestamp: new Date().toLocaleTimeString('zh-TW', { hour12: false }),
+        type: 'info',
+        message: `📤 發送指令: ${command}`,
+      });
+    }
+  };
 
   const getLogTypeColor = (type: DeploymentLogEntry['type']) => {
     switch (type) {
@@ -270,6 +306,10 @@ export const DeploymentDialog: React.FC<DeploymentDialogProps> = ({
       default:
         return 'text-muted-foreground';
     }
+  };
+
+  const getConnectionIcon = () => {
+    return wsState === 'connected' ? <Wifi className="h-4 w-4 text-green-500" /> : <WifiOff className="h-4 w-4 text-red-500" />;
   };
 
   return (
@@ -323,13 +363,41 @@ export const DeploymentDialog: React.FC<DeploymentDialogProps> = ({
                 )}
                 <span className="text-sm font-medium">{currentStatus}</span>
               </div>
-              {deploymentStatus && (
+              <div className="flex items-center gap-2">
+                {getConnectionIcon()}
                 <Badge variant="outline">
-                  狀態: {deploymentStatus.status}
+                  WebSocket ({wsState})
                 </Badge>
-              )}
+                {deploymentStatus && (
+                  <Badge variant="outline">
+                    狀態: {deploymentStatus.status}
+                  </Badge>
+                )}
+              </div>
             </div>
           </div>
+
+          {/* WebSocket 控制按鈕 */}
+          {isDeploying && (
+            <div className="mb-4 flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => sendWebSocketCommand('status')}
+                disabled={!wsClientRef.current?.isConnected()}
+              >
+                查詢狀態
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => wsClientRef.current?.ping()}
+                disabled={!wsClientRef.current?.isConnected()}
+              >
+                發送心跳
+              </Button>
+            </div>
+          )}
 
           {/* Deployment Logs */}
           <div className="space-y-4">
@@ -368,11 +436,16 @@ export const DeploymentDialog: React.FC<DeploymentDialogProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center justify-end py-2 border-t border-border">
+        <div className="flex items-center justify-between py-2 border-t border-border">
           <div className="flex items-center gap-4">
             <div className="text-xs text-muted-foreground">
               已用時間：{elapsedTime}
             </div>
+            <div className="text-xs text-muted-foreground">
+              連線模式：WebSocket
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
             {isDeploymentComplete && (
               <Button
                 onClick={() => {

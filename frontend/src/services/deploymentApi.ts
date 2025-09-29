@@ -169,41 +169,6 @@ class DeploymentApiService {
   }
 
   /**
-   * 建立 SSE 連線來接收即時部署日誌
-   */
-  createLogStream(sessionId: string): EventSource {
-    const url = `${this.baseUrl}/exam-sessions/${sessionId}/kubespray/deploy/logs/stream`;
-    return new EventSource(url);
-  }
-
-  /**
-   * 解析 SSE 資料為日誌條目
-   */
-  parseLogEntry(data: string, timestamp?: string): DeploymentLogEntry {
-    const now = timestamp || new Date().toLocaleTimeString('zh-TW', { hour12: false });
-
-    // 簡單的日誌類型判斷
-    let type: DeploymentLogEntry['type'] = 'info';
-    const lowerData = data.toLowerCase();
-
-    if (lowerData.includes('error') || lowerData.includes('failed') || lowerData.includes('fatal')) {
-      type = 'error';
-    } else if (lowerData.includes('warning') || lowerData.includes('warn')) {
-      type = 'warning';
-    } else if (lowerData.includes('ok') || lowerData.includes('success') || lowerData.includes('completed')) {
-      type = 'success';
-    }
-
-    return {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      timestamp: now,
-      type,
-      message: data,
-      raw: data,
-    };
-  }
-
-  /**
    * 完整的部署流程：建立會話 -> 生成配置 -> 啟動部署
    */
   async startFullDeployment(params: {
