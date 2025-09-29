@@ -2,6 +2,7 @@
 Kubespray API 代理路由
 提供前端統一的 API 端點，一對一映射到 Kubespray API Server
 """
+import json
 import logging
 import httpx
 from fastapi import APIRouter, HTTPException
@@ -390,8 +391,14 @@ async def stream_deployment_logs(session_id: str):
                 response.raise_for_status()
 
                 async def event_generator():
-                    async for chunk in response.aiter_text():
-                        yield chunk
+                    try:
+                        async for chunk in response.aiter_text():
+                            yield chunk
+                    except httpx.StreamClosed:
+                        logger.info(f"SSE 串流已關閉 - Session: {session_id}")
+                    except Exception as e:
+                        logger.error(f"SSE 串流錯誤: {e}")
+                        yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
 
                 return StreamingResponse(
                     event_generator(),
