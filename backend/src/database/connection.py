@@ -36,8 +36,14 @@ def get_database() -> Generator[Session, None, None]:
 
 def create_tables():
     """建立所有資料表"""
-    # 導入所有模型以確保它們被註冊
-    from ..models import vm_cluster_config, exam_session, exam_result
+    # 導入所有模型以確保它們被註冊到 Base.metadata
+    from ..models import (
+        VMClusterConfig,
+        ExamSession,
+        ExamResult,
+    )
+
+    # 建立所有表格
     Base.metadata.create_all(bind=engine)
 
 

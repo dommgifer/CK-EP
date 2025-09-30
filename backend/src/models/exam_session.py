@@ -6,10 +6,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 from sqlalchemy import Column, String, DateTime, Integer, Text, Enum as SqlEnum
-from sqlalchemy.ext.declarative import declarative_base
 from pydantic import BaseModel
-
-Base = declarative_base()
+from ..database.connection import Base
 
 
 class ExamSessionStatus(str, Enum):

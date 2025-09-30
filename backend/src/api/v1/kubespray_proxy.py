@@ -8,12 +8,11 @@ import asyncio
 from datetime import datetime
 import httpx
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse
 from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1", tags=["Kubespray Proxy"])
+router = APIRouter(tags=["Kubespray Proxy"])
 
 # Kubespray API Server 容器名稱和端口
 KUBESPRAY_API_URL = "http://k8s-exam-kubespray-api:8080"

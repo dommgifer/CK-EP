@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 from typing import Dict, List, Optional, Set
-from watchfiles import watch
+from watchfiles import awatch
 import asyncio
 import logging
 from datetime import datetime
@@ -159,7 +159,7 @@ class QuestionSetFileManager:
     async def _watch_files(self) -> None:
         """檔案監控循環"""
         try:
-            async for changes in watch(str(self.base_dir)):
+            async for changes in awatch(str(self.base_dir)):
                 logger.info(f"檢測到檔案變更: {changes}")
                 await self._handle_file_changes(changes)
         except asyncio.CancelledError:

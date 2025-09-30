@@ -5,10 +5,8 @@ T024: ExamResult 模型
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from sqlalchemy import Column, String, DateTime, Integer, Text, Float
-from sqlalchemy.ext.declarative import declarative_base
 from pydantic import BaseModel, Field
-
-Base = declarative_base()
+from ..database.connection import Base
 
 
 class ExamResult(Base):

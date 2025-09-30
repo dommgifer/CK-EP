@@ -9,7 +9,6 @@ from fastapi.middleware.gzip import GZipMiddleware
 
 from .api.v1.router import api_router
 from .api.v1.question_sets import initialize_question_set_manager, shutdown_question_set_manager
-from .api.kubespray_proxy import router as kubespray_proxy_router
 from .middleware.logging import LoggingMiddleware
 from .middleware.error import ErrorHandlerMiddleware
 from .database.connection import create_tables
@@ -89,7 +88,6 @@ app.add_middleware(ErrorHandlerMiddleware)
 
 # 註冊路由
 app.include_router(api_router, prefix="/api/v1")
-app.include_router(kubespray_proxy_router)
 
 # 健康檢查
 @app.get("/health")
