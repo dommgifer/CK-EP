@@ -10,6 +10,9 @@ PyYAML==6.0.1
 httpx==0.25.2
 requests==2.31.0
 
+# WebSocket 支援
+websockets>=11.0.3
+
 # Redis 支援 (用於 pub/sub 和狀態儲存)
 redis[hiredis]==5.0.1
 
