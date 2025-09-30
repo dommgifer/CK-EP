@@ -14,13 +14,25 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
+    // Docker 環境配置
+    host: '0.0.0.0',  // 允許容器外部訪問
+    port: 5173,       // Vite 標準 port
+    strictPort: true, // port 被佔用時直接失敗
+
+    // HMR 配置 (透過 nginx 代理時必須)
+    hmr: {
+      clientPort: 80,     // 瀏覽器透過 nginx (port 80) 連線
+      protocol: 'ws',
     },
+
+    // Docker 環境檔案監聽
+    watch: {
+      usePolling: true,   // Docker volume 需要 polling
+      interval: 1000,     // 每秒檢查一次
+    },
+
+    // 開發模式不需要代理 (nginx 處理)
+    proxy: undefined,
   },
   build: {
     outDir: 'dist',

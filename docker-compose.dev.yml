@@ -1,0 +1,132 @@
+# T094: Docker Compose 開發環境配置
+# 開發模式覆寫配置 - 掛載源碼以支援即時更新
+#
+# 使用方式：
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# 或使用 alias：
+#   alias dc-dev="docker compose -f docker-compose.yml -f docker-compose.dev.yml"
+#   dc-dev up
+
+services:
+  # ====================================
+  # Backend - 掛載源碼支援即時更新
+  # ====================================
+  backend:
+    volumes:
+      # 掛載源碼目錄（覆寫 Dockerfile 中的 COPY）
+      - ./backend/src:/app/src:rw
+
+      # 保留原有的 volume 掛載
+      - ./data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./backend/logs:/app/logs
+
+    # 開發模式環境變數
+    environment:
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+      - DEBUG_SQL=false  # 設為 true 可查看 SQL 查詢
+
+    # 開發模式使用 reload
+    command: ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  # ====================================
+  # Kubespray API - 掛載源碼支援即時更新
+  # ====================================
+  kubespray-api:
+    volumes:
+      # 掛載源碼目錄
+      - ./kubespray/src:/app/src:rw
+
+      # 保留原有的 volume 掛載
+      - ./data:/app/data
+      - ./data/kubespray_configs:/kubespray/inventory
+      - ./data/ssh_keys:/root/.ssh:ro
+      - ./data/question_sets:/kubespray/question_sets:ro
+
+    # 開發模式環境變數
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=DEBUG
+      - DATA_DIR=/app/data
+
+    # 開發模式使用 reload
+    command: ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
+
+  # ====================================
+  # Frontend - Vite 開發伺服器 (覆寫生產配置)
+  # ====================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: builder  # 使用包含 node_modules 的 stage
+    container_name: k8s-exam-frontend-dev
+
+    # 掛載源碼 - 修改即生效
+    volumes:
+      - ./frontend/src:/app/src:rw
+      - ./frontend/index.html:/app/index.html:rw
+      - ./frontend/vite.config.ts:/app/vite.config.ts:rw
+      - ./frontend/tailwind.config.js:/app/tailwind.config.js:rw
+      - ./frontend/postcss.config.js:/app/postcss.config.js:rw
+      - ./frontend/public:/app/public:rw
+      # 注意：不掛載 node_modules (使用容器內的)
+
+    # 使用 Vite dev server 而非 build
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+
+    ports:
+      - "5173:5173"  # Vite dev server
+
+    environment:
+      - NODE_ENV=development
+      - VITE_API_BASE_URL=/api/v1  # 使用相對路徑
+
+    restart: unless-stopped
+
+    networks:
+      - exam-network
+
+    labels:
+      - "com.k8s-exam.component=frontend-dev"
+      - "com.k8s-exam.mode=development"
+
+  # ====================================
+  # nginx - 使用開發配置
+  # ====================================
+  nginx:
+    volumes:
+      - ./nginx/nginx.dev.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/empty.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      # 移除 frontend_build volume (開發模式不需要)
+      - ./nginx/logs:/var/log/nginx
+
+    # 覆寫依賴條件 (開發模式下 frontend 持續運行)
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started  # 改為 started 而非 completed_successfully
+
+# ====================================
+# 開發環境說明
+# ====================================
+#
+# 優點：
+#   ✅ 修改 Python 代碼即時生效（uvicorn --reload）
+#   ✅ 無需重建 Docker image
+#   ✅ 更詳細的日誌輸出（DEBUG 級別）
+#
+# 注意事項：
+#   ⚠️  如果修改 requirements.txt，仍需重建 image：
+#       docker compose build backend kubespray-api
+#
+#   ⚠️  開發模式下效能略低（auto-reload 機制）
+#
+#   ⚠️  確保本機檔案權限正確，避免容器內無法寫入
+#
+# 切換回生產模式：
+#   docker compose up  # 只使用 docker-compose.yml
