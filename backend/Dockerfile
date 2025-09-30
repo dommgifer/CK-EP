@@ -1,5 +1,5 @@
 # 使用多階段建構來減少最終映像大小
-FROM python:3.11-slim as base
+FROM python:3.11-slim AS base
 
 # 設定 Python 環境變數
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -15,7 +15,7 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 WORKDIR /app
 
 # 第一階段：建立依賴環境
-FROM base as deps
+FROM base AS deps
 
 # 安裝建構工具（僅在建構階段需要）
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -37,7 +37,7 @@ RUN pip install --upgrade pip setuptools wheel && \
     pip install -r requirements.txt
 
 # 第二階段：生產映像
-FROM base as production
+FROM base AS production
 
 # 只安裝運行時需要的系統依賴
 RUN apt-get update && apt-get install -y --no-install-recommends \
