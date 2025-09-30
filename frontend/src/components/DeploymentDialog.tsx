@@ -314,7 +314,7 @@ export const DeploymentDialog: React.FC<DeploymentDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={handleCloseDialog}>
-      <DialogContent className="max-w-6xl max-h-[90vh] bg-background border border-border">
+      <DialogContent className="max-w-[98vw] w-[98vw] max-h-[95vh] bg-background border border-border">
         <DialogHeader className="space-y-4">
           <div className="flex items-center gap-3">
             <Rocket className="h-6 w-6 text-blue-500" />
@@ -351,54 +351,6 @@ export const DeploymentDialog: React.FC<DeploymentDialogProps> = ({
             </div>
           )}
 
-          {/* 部署狀態 */}
-          <div className="mb-4 p-3 bg-muted/30 rounded-md">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                {isDeploying && !isDeploymentComplete && (
-                  <Clock className="h-4 w-4 animate-spin text-blue-500" />
-                )}
-                {isDeploymentComplete && (
-                  <CheckCircle2 className="h-4 w-4 text-green-500" />
-                )}
-                <span className="text-sm font-medium">{currentStatus}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                {getConnectionIcon()}
-                <Badge variant="outline">
-                  WebSocket ({wsState})
-                </Badge>
-                {deploymentStatus && (
-                  <Badge variant="outline">
-                    狀態: {deploymentStatus.status}
-                  </Badge>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* WebSocket 控制按鈕 */}
-          {isDeploying && (
-            <div className="mb-4 flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => sendWebSocketCommand('status')}
-                disabled={!wsClientRef.current?.isConnected()}
-              >
-                查詢狀態
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => wsClientRef.current?.ping()}
-                disabled={!wsClientRef.current?.isConnected()}
-              >
-                發送心跳
-              </Button>
-            </div>
-          )}
-
           {/* Deployment Logs */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -408,8 +360,8 @@ export const DeploymentDialog: React.FC<DeploymentDialogProps> = ({
               </div>
             </div>
 
-            <Card className="h-[400px] bg-slate-900 border-slate-700">
-              <div ref={logContainerRef} className="h-full p-4 overflow-y-auto">
+            <Card className="h-[550px] bg-slate-900 border-slate-700">
+              <div ref={logContainerRef} className="h-full p-4 overflow-auto">
                 {logs.length === 0 ? (
                   <div className="flex items-center justify-center h-full text-slate-500">
                     <div className="text-center">
@@ -418,9 +370,9 @@ export const DeploymentDialog: React.FC<DeploymentDialogProps> = ({
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-1 font-mono text-sm">
+                  <div className="space-y-1 font-mono text-xs">
                     {logs.map((log) => (
-                      <div key={log.id} className="flex gap-2 text-slate-300">
+                      <div key={log.id} className="flex gap-2 text-slate-300 whitespace-nowrap">
                         <span className="text-slate-500 whitespace-nowrap flex-shrink-0">
                           {log.timestamp}
                         </span>
