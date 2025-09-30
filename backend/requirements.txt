@@ -16,6 +16,9 @@ hiredis==2.2.3
 httpx==0.25.2
 requests==2.31.0
 
+# WebSocket 支援
+websockets>=11.0.3
+
 # 檔案處理
 watchfiles==0.21.0
 aiofiles==23.2.1
