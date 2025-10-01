@@ -14,6 +14,47 @@ from ...models.exam_session import ExamSession, ExamSessionStatus
 router = APIRouter()
 
 
+@router.get("/{session_id}/vnc")
+async def get_vnc_url(
+    session_id: str,
+    db: Session = Depends(get_database)
+) -> Dict[str, Any]:
+    """
+    GET /api/v1/exam-sessions/{session_id}/vnc 端點
+    取得 VNC 存取 URL（VNC 容器系統啟動時就存在，無需等待）
+    """
+    try:
+        # 檢查會話存在性
+        db_session = db.query(ExamSession).filter(
+            ExamSession.id == session_id
+        ).first()
+
+        if not db_session:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"考試會話 '{session_id}' 不存在"
+            )
+
+        # VNC 容器是系統啟動時就存在的，所以直接回傳 URL
+        # VNC 設定為無密碼模式，autoconnect 自動連線
+        vnc_url = f"http://192.168.1.19:6901/vnc.html?autoconnect=true"
+
+        return {
+            "url": vnc_url,
+            "session_id": session_id,
+            "container": "k8s-exam-vnc",
+            "ready": True
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"取得 VNC URL 失敗: {str(e)}"
+        )
+
+
 @router.post("/{session_id}/vnc/token")
 async def generate_vnc_token(
     session_id: str,
