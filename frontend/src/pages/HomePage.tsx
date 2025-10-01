@@ -2,24 +2,59 @@
  * 首頁
  * 基於設計原型的現代化首頁介面 - 暗色主題版本
  */
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Clock, BookOpen, Target } from 'lucide-react'
 import { mockQuestions, examConfig } from '../data/questions'
 import { Card } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { ExamSetupDialog } from '../components/ExamSetupDialog'
 import { DeploymentDialog } from '../components/DeploymentDialog'
+import { SessionRecoveryDialog } from '../components/SessionRecoveryDialog'
+import { apiClient } from '../services/api'
 // import heroImage from '../assets/k8s-hero.jpg'
 
+interface ActiveSession {
+  id: string;
+  question_set_id: string;
+  status: string;
+  created_at: string;
+  start_time: string | null;
+}
+
 const HomePage = () => {
-  const [examStarted, setExamStarted] = useState(false)
+  const navigate = useNavigate()
   const [showExamSetupDialog, setShowExamSetupDialog] = useState(false)
   const [showDeploymentDialog, setShowDeploymentDialog] = useState(false)
+  const [showSessionRecoveryDialog, setShowSessionRecoveryDialog] = useState(false)
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+  const [detectedSession, setDetectedSession] = useState<ActiveSession | null>(null)
   const [deploymentParams, setDeploymentParams] = useState<{
     examType: string;
     examSet: string;
     vmConfigId: string;
   } | undefined>(undefined)
+
+  // 頁面載入時檢查是否有活動的考試會話
+  useEffect(() => {
+    const checkActiveSession = async () => {
+      try {
+        const response = await apiClient.get<ActiveSession[]>('/exam-sessions?status=in_progress')
+
+        if (response.data.length > 0) {
+          // 取第一個活動的 session
+          const activeSession = response.data[0]
+          setDetectedSession(activeSession)
+          setShowSessionRecoveryDialog(true)
+        }
+      } catch (error) {
+        console.error('檢查活動會話失敗:', error)
+        // 靜默失敗，不影響使用者體驗
+      }
+    }
+
+    checkActiveSession()
+  }, []) // 只在頁面載入時執行一次
 
   const startDeployment = () => {
     setShowExamSetupDialog(true)
@@ -35,13 +70,41 @@ const HomePage = () => {
     setShowDeploymentDialog(true)
   }
 
-  const handleDeploymentComplete = () => {
+  const handleDeploymentComplete = (sessionId: string) => {
     setShowDeploymentDialog(false)
-    setExamStarted(true)
+    setCurrentSessionId(sessionId)
+
+    // 導航到考試頁面
+    navigate(`/exam/${sessionId}`)
   }
 
-  if (examStarted) {
-    return <div>考試進行中...</div>
+  // 恢復考試
+  const handleResumeExam = () => {
+    if (detectedSession) {
+      setShowSessionRecoveryDialog(false)
+      navigate(`/exam/${detectedSession.id}`)
+    }
+  }
+
+  // 停止並開始新考試
+  const handleStopAndStartNew = async () => {
+    if (detectedSession) {
+      try {
+        // 更新 session 狀態為 cancelled
+        await apiClient.patch(`/exam-sessions/${detectedSession.id}`, {
+          status: 'cancelled'
+        })
+
+        setShowSessionRecoveryDialog(false)
+        setDetectedSession(null)
+
+        // 可選：顯示考試設定對話框讓使用者開始新考試
+        // setShowExamSetupDialog(true)
+      } catch (error) {
+        console.error('停止會話失敗:', error)
+        // 可以顯示錯誤訊息
+      }
+    }
   }
 
   return (
@@ -109,6 +172,15 @@ const HomePage = () => {
           </div>
         </div>
       </div>
+
+      {/* Session Recovery Dialog */}
+      <SessionRecoveryDialog
+        open={showSessionRecoveryDialog}
+        onOpenChange={setShowSessionRecoveryDialog}
+        sessionData={detectedSession}
+        onResumeExam={handleResumeExam}
+        onStopAndStartNew={handleStopAndStartNew}
+      />
 
       {/* Exam Setup Dialog */}
       <ExamSetupDialog

@@ -15,7 +15,7 @@ import { createWebSocketDeploymentClient, WebSocketDeploymentClient, WebSocketSt
 interface DeploymentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onDeploymentComplete: () => void;
+  onDeploymentComplete: (sessionId: string) => void;
   deploymentParams?: {
     examType: string;
     examSet: string;
@@ -229,7 +229,8 @@ export const DeploymentDialog: React.FC<DeploymentDialogProps> = ({
 
           // 自動跳轉到考試（延遲3秒讓使用者看到完成訊息）
           setTimeout(() => {
-            onDeploymentComplete();
+            // 直接使用函數參數的 sessionId，避免閉包問題
+            onDeploymentComplete(sessionId);
             onOpenChange(false);
           }, 3000);
 
